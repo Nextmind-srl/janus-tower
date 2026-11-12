@@ -5,6 +5,7 @@
 ### AI FinOps & Security Posture Control Tower for Google Cloud
 *Look both ways across your Cloud AI estate: token economics on one face, Shadow AI and security posture on the other.*
 
+[![CI](https://github.com/Nextmind-srl/janus-tower/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nextmind-srl/janus-tower/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![Runtime dependencies: 1](https://img.shields.io/badge/Runtime%20dependencies-1%20(urllib3)-10B981.svg)](./requirements.txt)

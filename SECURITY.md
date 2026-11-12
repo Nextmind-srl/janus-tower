@@ -4,7 +4,8 @@
 
 Please **do not open a public issue** for security problems.
 
-Send a description of the problem, the steps to reproduce it and the affected version to
+Use GitHub's private reporting: [Report a vulnerability](https://github.com/Nextmind-srl/janus-tower/security/advisories/new),
+or send a description of the problem, the steps to reproduce it and the affected version to
 **info@nextmind.it**. We aim to acknowledge reports within 5 working days.
 
 ## Scope and design assumptions

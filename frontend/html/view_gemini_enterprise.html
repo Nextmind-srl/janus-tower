@@ -1,0 +1,147 @@
+      <!-- =================================================================== -->
+      <!-- VIEW 5: GEMINI ENTERPRISE APPS, GDPR REGIONS, FINOPS & MODEL ARMOR  -->
+      <!-- =================================================================== -->
+      <section id="view-features" class="hidden space-y-4">
+        <div class="subtab-bar jt-tabs" data-subtab-nav="features">
+          <button type="button" data-jt-click="switchSubTab('features', 'gdpr-finops')" data-subtab-btn="gdpr-finops" class="subtab-btn active" title="GDPR Data Residency &amp; FinOps">
+            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-globe"/></svg> GDPR &amp; FinOps</span>
+          </button>
+          <button type="button" data-jt-click="switchSubTab('features', 'gemini-apps')" data-subtab-btn="gemini-apps" class="subtab-btn" title="Gemini Enterprise &amp; Agentspace Apps">
+            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-globe"/></svg> Gemini Apps</span>
+            <span id="subtab-badge-feat-apps" class="subtab-badge">0</span>
+          </button>
+          <button type="button" data-jt-click="switchSubTab('features', 'mcp-registry')" data-subtab-btn="mcp-registry" class="subtab-btn" title="MCP Servers &amp; Agent Registry">
+            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-user"/></svg> MCP &amp; Agents</span>
+            <span id="subtab-badge-feat-mcp" class="subtab-badge">0</span>
+          </button>
+          <button type="button" data-jt-click="switchSubTab('features', 'model-armor')" data-subtab-btn="model-armor" class="subtab-btn" title="Model Armor Coverage &amp; Templates">
+            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-shield"/></svg> Model Armor</span>
+            <span id="subtab-badge-feat-armor" class="subtab-badge">0</span>
+          </button>
+          <button type="button" data-jt-click="switchSubTab('features', 'deployed-res')" data-subtab-btn="deployed-res" class="subtab-btn" title="Deployed AI Resources">
+            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-bot"/></svg> Deployed Resources</span>
+            <span id="subtab-badge-feat-res" class="subtab-badge">0</span>
+          </button>
+          <button type="button" data-jt-click="switchSubTab('features', 'enabled-apis')" data-subtab-btn="enabled-apis" class="subtab-btn" title="Enabled AI Services &amp; APIs">
+            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-puzzle"/></svg> Enabled APIs</span>
+            <span id="subtab-badge-feat-apis" class="subtab-badge">0</span>
+          </button>
+        </div>
+
+        <!-- Sub-Tab 1: GDPR Data Residency (EU / Global / Non-EU) & FinOps Extended -->
+        <div data-subtab-panel="gdpr-finops" id="residency-and-finops-container" class="space-y-4"></div>
+
+        <!-- Sub-Tab 2: Gemini Enterprise / Agentspace Apps & Vertex AI Search -->
+        <div data-subtab-panel="gemini-apps" class="hidden space-y-3">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-[#002D62]"><svg class="jt-ico" aria-hidden="true"><use href="#ico-globe"/></svg> Gemini Enterprise (Agentspace) Apps &amp; Vertex AI Search</h3>
+          <div id="gemini-enterprise-apps-container" class="space-y-4"></div>
+        </div>
+
+        <!-- Sub-Tab 3: MCP Server Catalog & Agent Registry -->
+        <div data-subtab-panel="mcp-registry" class="hidden space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 class="text-xs font-extrabold uppercase tracking-wider text-[#002D62]"><svg class="jt-ico" aria-hidden="true"><use href="#ico-user"/></svg> MCP Server Catalog &amp; Agent Registry (MCP/Agents &amp; Versioning)</h3>
+              <p class="text-[11px] text-slate-500 mt-0.5">Centralized inventory of A2A/ADK Agents, MCP Servers / Tools, runtime versions, and call telemetry.</p>
+            </div>
+            <div id="mcp-registry-kpi-badges" class="flex flex-wrap items-center gap-1.5 text-[11px]"></div>
+          </div>
+          <div class="jt-table-panel bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="jt-table w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50">
+                    <th class="py-3 px-3.5">Agent / MCP Server</th>
+                    <th class="py-3 px-3.5">Type &amp; Protocol</th>
+                    <th class="py-3 px-3.5">Project &amp; Region</th>
+                    <th class="py-3 px-3.5">Version &amp; Model</th>
+                    <th class="py-3 px-3.5">Status</th>
+                    <th class="py-3 px-3.5 text-right">Console</th>
+                  </tr>
+                </thead>
+                <tbody id="mcp-registry-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-Tab 4: Model Armor Coverage Matrix + Model Armor Configurations & Templates -->
+        <div data-subtab-panel="model-armor" class="hidden space-y-5">
+          <div class="space-y-2.5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 class="text-xs font-extrabold uppercase tracking-wider text-[#002D62]"><svg class="jt-ico" aria-hidden="true"><use href="#ico-shield"/></svg> Model Armor Coverage Matrix by Project vs Active LLM Regions</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">Checks alignment between active LLM traffic regions and Model Armor templates. Remediation CLI commands are centralized in <b>AI Security &amp; Posture</b>.</p>
+              </div>
+              <div id="model-armor-matrix-kpi-badges" class="flex flex-wrap items-center gap-1.5 text-[11px]"></div>
+            </div>
+            <div class="jt-table-panel bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+              <div class="overflow-x-auto">
+                <table class="jt-table w-full text-left border-collapse">
+                  <thead>
+                    <tr class="border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50">
+                      <th class="py-3 px-3.5">AI Project</th>
+                      <th class="py-3 px-3.5">LLM Call Regions</th>
+                      <th class="py-3 px-3.5">Floor &amp; Templates</th>
+                      <th class="py-3 px-3.5 text-right">Sanitize / Threats</th>
+                      <th class="py-3 px-3.5">Coverage Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="model-armor-matrix-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500"><svg class="jt-ico" aria-hidden="true"><use href="#ico-shield"/></svg> Google Model Armor Configurations &amp; Templates</h3>
+            <div id="model-armor-cards" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
+          </div>
+        </div>
+
+        <!-- Sub-Tab 5: Deployed AI Resources -->
+        <div data-subtab-panel="deployed-res" class="hidden space-y-2">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500"><svg class="jt-ico" aria-hidden="true"><use href="#ico-bot"/></svg> Agents, Reasoning Engines (ADK), Notebooks, Model Garden, Endpoints &amp; Dialogflow CX</h3>
+          <div class="jt-table-panel bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="jt-table w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50">
+                    <th class="py-3 px-4">Resource Type</th>
+                    <th class="py-3 px-4">Name &amp; ID</th>
+                    <th class="py-3 px-4">Project</th>
+                    <th class="py-3 px-4">Region</th>
+                    <th class="py-3 px-4">Details &amp; Executions</th>
+                    <th class="py-3 px-4">Updated</th>
+                    <th class="py-3 px-4 text-right">GCP Console</th>
+                  </tr>
+                </thead>
+                <tbody id="deployed-resources-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-Tab 6: Enabled AI Services & APIs -->
+        <div data-subtab-panel="enabled-apis" class="hidden space-y-2">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500"><svg class="jt-ico" aria-hidden="true"><use href="#ico-puzzle"/></svg> Enabled AI Services &amp; APIs across Projects</h3>
+          <div class="jt-table-panel bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="jt-table w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50">
+                    <th class="py-3 px-4">Service / Capability</th>
+                    <th class="py-3 px-4">Project</th>
+                    <th class="py-3 px-4">Category</th>
+                    <th class="py-3 px-4">Status</th>
+                    <th class="py-3 px-4">Detected Methods</th>
+                    <th class="py-3 px-4 text-right">AI Calls</th>
+                    <th class="py-3 px-4 text-right">Total Calls</th>
+                  </tr>
+                </thead>
+                <tbody id="vertex-features-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>

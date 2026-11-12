@@ -1,0 +1,2398 @@
+/* =========================================================================
+ * JanusTower — Design/jt-theme.css (Fase 1: Tema Globale e Rimappatura Token)
+ * Fonte: Design/SPEC_PROTOTIPO.md + Design/tokens.css
+ * Nessun dato o struttura HTML modificata: rimappa colori Tailwind, card,
+ * tabelle, badge, scrollbar e focus ring sui token del prototipo.
+ * ========================================================================= */
+
+/* 1. Base pagina, tipografia e cifre tabellari */
+body.jt-root {
+  background-color: var(--jt-bg) !important;
+  color: var(--jt-text) !important;
+  font-family: var(--jt-font-sans);
+  font-size: var(--jt-fs-md);
+  -webkit-font-smoothing: antialiased;
+}
+
+.jt-root .mono,
+.jt-root .font-mono,
+.jt-root table td.text-right,
+.jt-root [id^="kpi-"],
+.jt-root [id^="sync-kpi-"] {
+  font-family: var(--jt-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Area principale di scorrimento */
+.jt-root #main-scroll-area {
+  background-color: var(--jt-bg) !important;
+  padding: 16px 32px 48px;
+  padding-top: 12px !important;
+}
+
+@media (max-width: 1024px) {
+  .jt-root #main-scroll-area {
+    padding: 16px 18px 36px;
+  }
+}
+
+/* 2. Scrollbar globale (SPEC_PROTOTIPO sez. 2: thumb #CBD3DF, raggio 4, larghezza 8) */
+.jt-root ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.jt-root ::-webkit-scrollbar-track {
+  background: var(--jt-bg);
+}
+.jt-root ::-webkit-scrollbar-thumb {
+  background: #CBD3DF;
+  border-radius: 4px;
+}
+.jt-root ::-webkit-scrollbar-thumb:hover {
+  background: #9FB0C6;
+}
+
+/* 3. Focus ring ambra e link (SPEC_PROTOTIPO sez. 2, PIANO_RESTYLING Fase 1 & Task A3) */
+body.jt-root button:focus-visible,
+body.jt-root a:focus-visible,
+body.jt-root input:focus-visible,
+body.jt-root select:focus-visible,
+body.jt-root textarea:focus-visible,
+body.jt-root [tabindex]:focus-visible,
+body.jt-root input.focus\:outline-none:focus-visible,
+body.jt-root select.focus\:outline-none:focus-visible,
+body.jt-root textarea.focus\:outline-none:focus-visible,
+body.jt-root .focus\:outline-none:focus-visible,
+body.jt-root .outline-none:focus-visible,
+body.jt-root .jt-account-select:focus-visible,
+body.jt-root .jt-date-input:focus-visible {
+  outline: 2px solid var(--jt-amber);
+  outline-offset: 1px;
+}
+
+body.jt-root main input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+body.jt-root main select:focus-visible,
+body.jt-root aside select.focus\:outline-none:focus-visible {
+  border-color: var(--jt-amber-700);
+  box-shadow: 0 0 0 2px rgba(242, 181, 68, 0.22);
+  outline: 2px solid var(--jt-amber);
+  outline-offset: 1px;
+}
+
+.jt-root main a:not(.bg-\[\#002D62\]):not(.bg-\[\#0F2A4A\]):not(.text-white) {
+  color: var(--jt-navy);
+  transition: color 0.12s ease;
+}
+.jt-root main a:not(.bg-\[\#002D62\]):not(.bg-\[\#0F2A4A\]):not(.text-white):hover {
+  color: var(--jt-amber-700);
+}
+
+/* 4. Rimappatura Neutrali Tailwind (slate / gray) -> Token JanusTower */
+.jt-root .bg-slate-50,
+.jt-root .bg-gray-50,
+.jt-root .bg-slate-50\/80,
+.jt-root .bg-slate-50\/95 {
+  background-color: var(--jt-bg) !important;
+}
+
+.jt-root .bg-slate-100,
+.jt-root .bg-gray-100,
+.jt-root .bg-slate-50\/40 {
+  background-color: var(--jt-surface-2) !important;
+}
+
+.jt-root .bg-\[\#002D62\],
+.jt-root .bg-\[\#0F2A4A\],
+.jt-root .bg-slate-900 {
+  background-color: var(--jt-navy) !important;
+}
+
+.jt-root .border-\[\#002D62\],
+.jt-root .border-\[\#0F2A4A\] {
+  border-color: var(--jt-navy) !important;
+}
+
+.jt-root .from-\[\#002D62\],
+.jt-root .from-\[\#0F2A4A\] {
+  --tw-gradient-from: var(--jt-navy) var(--tw-gradient-from-position) !important;
+}
+
+.jt-root .bg-slate-800 {
+  background-color: var(--jt-navy-800) !important;
+}
+
+.jt-root .text-slate-900,
+.jt-root .text-slate-800,
+.jt-root .text-gray-900,
+.jt-root .text-gray-800,
+.jt-root .text-\[\#002D62\],
+.jt-root .text-\[\#0F2A4A\] {
+  color: var(--jt-text) !important;
+}
+
+.jt-root .text-slate-700,
+.jt-root .text-slate-600,
+.jt-root .text-gray-700,
+.jt-root .text-gray-600 {
+  color: var(--jt-text-2) !important;
+}
+
+.jt-root .text-slate-500,
+.jt-root .text-gray-500 {
+  color: var(--jt-text-3) !important;
+}
+
+.jt-root .text-slate-400,
+.jt-root .text-gray-400,
+.jt-root main .text-slate-300,
+.jt-root .jt-drawer .text-slate-300 {
+  color: var(--jt-text-3) !important;
+}
+
+/* Preservazione testo chiaro dentro blocchi terminale/CLI scuri */
+.jt-root .bg-slate-900.text-slate-100,
+.jt-root .bg-slate-800.text-slate-100,
+.jt-root .bg-slate-900 .text-slate-100 {
+  color: #F1F4F8 !important;
+}
+.jt-root .bg-slate-900 .text-slate-300,
+.jt-root .bg-slate-800 .text-slate-300,
+.jt-root .bg-slate-900 .text-slate-400,
+.jt-root .bg-slate-800 .text-slate-400 {
+  color: var(--jt-on-dark-2) !important;
+}
+.jt-root .bg-slate-900 .text-emerald-200,
+.jt-root .bg-slate-900 .text-emerald-300,
+.jt-root .bg-slate-800.text-emerald-300,
+.jt-root .bg-slate-900.text-emerald-300 {
+  color: #4ADE80 !important;
+}
+.jt-root .bg-slate-900 .text-amber-300 {
+  color: var(--jt-amber) !important;
+}
+.jt-root .bg-slate-900 .text-sky-300 {
+  color: #93C5FD !important;
+}
+
+/* Bordi e divisori neutrali */
+.jt-root .border-slate-200,
+.jt-root .border-slate-300,
+.jt-root .border-gray-200,
+.jt-root .border-slate-200\/80,
+.jt-root .border-slate-200\/70 {
+  border-color: var(--jt-border) !important;
+}
+
+.jt-root .border-slate-100,
+.jt-root .border-gray-100 {
+  border-color: var(--jt-divider) !important;
+}
+
+.jt-root .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.jt-root .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--jt-divider) !important;
+}
+
+/* 5. Rimappatura Toni Semantici (SPEC_PROTOTIPO sez. 2 — Toni dei badge) */
+
+/* GREEN (emerald / green / teal) -> #E6F6EC / #17773F */
+.jt-root .bg-emerald-50,
+.jt-root .bg-emerald-100,
+.jt-root .bg-emerald-50\/70,
+.jt-root .bg-emerald-50\/50,
+.jt-root .bg-emerald-50\/40,
+.jt-root .bg-green-50,
+.jt-root .bg-green-100,
+.jt-root .bg-teal-50,
+.jt-root .bg-teal-100 {
+  background-color: var(--jt-success-bg) !important;
+}
+
+.jt-root .text-emerald-500,
+.jt-root .text-emerald-600,
+.jt-root .text-emerald-700,
+.jt-root .text-emerald-800,
+.jt-root .text-emerald-900,
+.jt-root .text-emerald-950,
+.jt-root .text-green-500,
+.jt-root .text-green-600,
+.jt-root .text-green-700,
+.jt-root .text-green-800,
+.jt-root .text-green-900,
+.jt-root .text-teal-600,
+.jt-root .text-teal-700,
+.jt-root .text-teal-800,
+.jt-root .text-teal-900,
+.jt-root .text-teal-950 {
+  color: #17773F !important;
+}
+
+.jt-root .border-emerald-100,
+.jt-root .border-emerald-200,
+.jt-root .border-emerald-300,
+.jt-root .border-teal-200,
+.jt-root .border-teal-300 {
+  border-color: #BDE5CB !important;
+}
+
+/* AMBER (amber / yellow / orange) -> #FDF3DE / #8A5E0B */
+.jt-root .bg-amber-50,
+.jt-root .bg-amber-100,
+.jt-root .bg-amber-50\/70,
+.jt-root .bg-amber-50\/80,
+.jt-root .bg-yellow-50,
+.jt-root .bg-orange-50,
+.jt-root .bg-orange-100 {
+  background-color: var(--jt-warning-bg) !important;
+}
+
+.jt-root .text-amber-500,
+.jt-root .text-amber-600,
+.jt-root .text-amber-700,
+.jt-root .text-amber-800,
+.jt-root .text-amber-900,
+.jt-root .text-amber-950,
+.jt-root .text-orange-600,
+.jt-root .text-orange-700,
+.jt-root .text-orange-800,
+.jt-root .text-orange-900 {
+  color: #8A5E0B !important;
+}
+
+.jt-root .border-amber-200,
+.jt-root .border-amber-200\/60,
+.jt-root .border-amber-300,
+.jt-root .border-orange-200,
+.jt-root .border-orange-300 {
+  border-color: #F0D9A8 !important;
+}
+
+/* RED (rose / red) -> #FCEEEC / #C2362B */
+.jt-root .bg-rose-50,
+.jt-root .bg-rose-100,
+.jt-root .bg-rose-50\/80,
+.jt-root .bg-red-50,
+.jt-root .bg-red-100 {
+  background-color: var(--jt-danger-bg) !important;
+}
+
+.jt-root .text-rose-600,
+.jt-root .text-rose-700,
+.jt-root .text-rose-800,
+.jt-root .text-red-600,
+.jt-root .text-red-700,
+.jt-root .text-red-800 {
+  color: var(--jt-danger) !important;
+}
+
+.jt-root .border-rose-200,
+.jt-root .border-rose-300,
+.jt-root .border-red-200 {
+  border-color: #F3C5C1 !important;
+}
+
+/* BLUE (blue / indigo / sky / cyan) -> #E8EFF8 / #2E5A8C */
+.jt-root .bg-blue-50,
+.jt-root .bg-blue-100,
+.jt-root .bg-blue-50\/70,
+.jt-root .bg-blue-50\/60,
+.jt-root .bg-indigo-50,
+.jt-root .bg-indigo-100,
+.jt-root .bg-indigo-50\/70,
+.jt-root .bg-indigo-50\/60,
+.jt-root .bg-sky-50 {
+  background-color: var(--jt-info-bg) !important;
+}
+
+.jt-root .text-blue-600,
+.jt-root .text-blue-700,
+.jt-root .text-blue-800,
+.jt-root .text-blue-900,
+.jt-root .text-indigo-600,
+.jt-root .text-indigo-700,
+.jt-root .text-indigo-800,
+.jt-root .text-indigo-900 {
+  color: var(--jt-info) !important;
+}
+
+.jt-root .border-blue-200,
+.jt-root .border-blue-200\/60,
+.jt-root .border-blue-300,
+.jt-root .border-indigo-100,
+.jt-root .border-indigo-200,
+.jt-root .border-indigo-300 {
+  border-color: #C9D8EC !important;
+}
+
+/* PURPLE (purple / violet) -> #F0EBFA / #5B3FA0 */
+.jt-root .bg-purple-50,
+.jt-root .bg-purple-100,
+.jt-root .bg-violet-50 {
+  background-color: #F0EBFA !important;
+}
+
+.jt-root .text-purple-700,
+.jt-root .text-purple-800,
+.jt-root .text-purple-900,
+.jt-root .text-purple-950 {
+  color: #5B3FA0 !important;
+}
+
+.jt-root .border-purple-200,
+.jt-root .border-purple-200\/60,
+.jt-root .border-purple-300 {
+  border-color: #D8CBF2 !important;
+}
+
+/* 6. Card, Pannelli e Ombre leggere (SPEC_PROTOTIPO sez. 3 & 4) */
+.jt-root main .bg-white.rounded-xl,
+.jt-root main .bg-white.rounded-2xl {
+  background-color: var(--jt-surface) !important;
+  border-color: var(--jt-border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 2px rgba(15, 42, 74, 0.04) !important;
+}
+
+.jt-root .shadow-2xs,
+.jt-root .shadow-xs,
+.jt-root .shadow-sm {
+  box-shadow: 0 1px 2px rgba(15, 42, 74, 0.04) !important;
+}
+
+/* Badge arrotondati nelle celle e nelle KPI card: pill/chip compatti */
+.jt-root main span.rounded-full {
+  border-radius: 6px !important;
+  font-weight: 600;
+}
+
+/* 7. Tabelle (SPEC_PROTOTIPO sez. 4 — Pannello tabella) */
+.jt-root main table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.jt-root main table thead tr {
+  background-color: #F7F9FC !important;
+  border-bottom: 1px solid var(--jt-border) !important;
+}
+
+.jt-root main table thead th {
+  padding: 10px 14px !important;
+  font-size: var(--jt-fs-sm) !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: var(--jt-text-3) !important;
+  background-color: #F7F9FC !important;
+  border-bottom: 1px solid var(--jt-border) !important;
+  white-space: nowrap;
+}
+
+.jt-root main table tbody td {
+  padding: 13px 16px !important;
+  border-bottom: 1px solid var(--jt-divider) !important;
+  vertical-align: top;
+  color: var(--jt-text);
+}
+
+.jt-root main table tbody tr:nth-child(even) {
+  background-color: #FAFBFD;
+}
+
+.jt-root main table tbody tr:hover {
+  background-color: #F7F9FC !important;
+}
+
+/* Controlli barra tabella (.fe-tbl-*) */
+.jt-root .fe-tbl-search,
+.jt-root .fe-tbl-ctx-select {
+  border-color: #D5DCE6 !important;
+  border-radius: 8px !important;
+  color: var(--jt-text) !important;
+  background-color: var(--jt-surface) !important;
+}
+
+.jt-root .fe-tbl-csv-btn,
+.jt-root .fe-tbl-reset {
+  border-radius: 8px !important;
+}
+
+/* 8. Sidebar e Navigazione (Fase 2 — SPEC_PROTOTIPO sez. 4 "Sidebar") */
+.jt-root aside.jt-sidebar {
+  width: 248px;
+  min-width: 248px;
+  max-width: 248px;
+  background-color: var(--jt-surface) !important;
+  border-right: 1px solid var(--jt-border) !important;
+  transition: width 0.18s ease, min-width 0.18s ease, max-width 0.18s ease;
+  overflow-x: hidden;
+}
+
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed {
+  width: 68px;
+  min-width: 68px;
+  max-width: 68px;
+}
+
+.jt-root .jt-sidebar__body {
+  padding: 12px 10px;
+}
+
+.jt-root .jt-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.jt-root .jt-nav-group-label {
+  font-size: var(--jt-fs-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--jt-text-3);
+  height: 16px;
+  line-height: 16px;
+  padding: 0 10px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jt-root .jt-nav-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.jt-root .gcp-nav-item {
+  position: relative;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 0 10px;
+  gap: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--jt-text-2);
+  font-size: 13px;
+  font-weight: 500;
+  width: 100%;
+  text-align: left;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.jt-root .jt-nav-item__main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.jt-root .jt-nav-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.jt-root .jt-nav-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jt-root .gcp-nav-item:hover {
+  background-color: #EEF2F7;
+  color: var(--jt-navy);
+}
+
+.jt-root .gcp-nav-item.active {
+  background-color: #EEF2F7;
+  color: var(--jt-navy);
+  font-weight: 600;
+}
+
+.jt-root .gcp-nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background-color: var(--jt-amber);
+}
+
+.jt-root .gcp-nav-item .nav-badge {
+  font-family: var(--jt-font-mono);
+  font-size: var(--jt-fs-sm);
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background-color: var(--jt-surface-2);
+  color: var(--jt-text-3);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.jt-root .gcp-nav-item.active .nav-badge {
+  background-color: var(--jt-navy) !important;
+  color: var(--jt-white) !important;
+}
+
+/* Stato compresso della sidebar (68px, solo icone) */
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-nav-group-label,
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-nav-label,
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed .gcp-nav-item .nav-badge,
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-sidebar-extra,
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-perimeter-box,
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-collapse-label {
+  display: none !important;
+}
+
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed .gcp-nav-item {
+  justify-content: center;
+  padding: 0;
+}
+
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-nav-item__main {
+  justify-content: center;
+  gap: 0;
+}
+
+/* Fondo sidebar: Active Perimeter + Collapse menu */
+.jt-root .jt-sidebar-footer {
+  padding: 10px;
+  border-top: 1px solid var(--jt-divider);
+  background-color: var(--jt-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.jt-root .jt-perimeter-box {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background-color: #FAFBFD;
+  border: 1px solid var(--jt-divider);
+  color: var(--jt-text-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.jt-root .jt-collapse-btn {
+  height: 36px;
+  width: 100%;
+  border-radius: 8px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--jt-text-3);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.jt-root .jt-collapse-btn:hover {
+  background-color: #EEF2F7;
+  color: var(--jt-navy);
+}
+
+.jt-root .jt-collapse-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.jt-root .jt-collapse-icon--expand {
+  display: none;
+}
+
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-collapse-icon--collapse {
+  display: none;
+}
+
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-collapse-icon--expand {
+  display: block;
+}
+
+.jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-collapse-btn {
+  justify-content: center;
+  padding: 0;
+}
+
+/* 9. Testata di Pagina e Banner Informativo (Fase 2 — SPEC_PROTOTIPO sez. 4 + Task D6) */
+.jt-root .jt-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 0;
+  margin-top: 0 !important;
+}
+
+.jt-root #global-summary-strip {
+  margin-top: 8px !important;
+}
+
+.jt-root #main-scroll-area > section[id^="view-"] {
+  margin-top: 10px !important;
+}
+
+.jt-root .jt-page-header__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.jt-root .jt-page-title {
+  font-size: var(--jt-fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--jt-navy);
+  margin: 0;
+}
+
+.jt-root .jt-page-subtitle {
+  font-size: var(--jt-fs-sm);
+  color: var(--jt-text-muted);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.jt-root .jt-page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.jt-root .jt-page-search {
+  height: 34px;
+  border-radius: 8px !important;
+  border: 1px solid #D5DCE6 !important;
+  background-color: var(--jt-surface) !important;
+  padding: 0 12px !important;
+  font-size: 13px !important;
+  color: var(--jt-text) !important;
+}
+
+.jt-root .jt-readout[role="button"],
+.jt-root .jt-status[role="button"] {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.jt-root .jt-readout[role="button"]:hover,
+.jt-root .jt-status[role="button"]:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(242, 181, 68, 0.55);
+}
+
+/* Banner informativo (#global-new-projects-banner) */
+.jt-root .jt-info-banner {
+  background-color: #FDF6E6 !important;
+  border: 1px solid #F0D9A8 !important;
+  border-radius: 10px !important;
+  padding: 10px 16px !important;
+  color: #6B4A0A !important;
+  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.jt-root .jt-info-banner.hidden {
+  display: none !important;
+}
+
+.jt-root .jt-info-banner__lead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.jt-root .jt-info-banner__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--jt-amber);
+  flex-shrink: 0;
+}
+
+.jt-root .jt-info-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.jt-root .jt-info-banner__btn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background-color: var(--jt-navy);
+  color: var(--jt-white);
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  transition: background-color 0.12s ease;
+}
+
+.jt-root .jt-info-banner__btn:hover {
+  background-color: var(--jt-navy-800);
+}
+
+.jt-root .jt-info-banner__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: #6B4A0A;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background-color 0.12s ease;
+}
+
+.jt-root .jt-info-banner__close:hover {
+  background-color: rgba(15, 42, 74, 0.06);
+}
+
+/* Barra sotto-tab orizzontale (.subtab-bar / .jt-tabs) — riga singola D2 */
+.jt-root .subtab-bar,
+.jt-root .jt-tabs {
+  background-color: var(--jt-surface);
+  border-color: var(--jt-border);
+  border-bottom: 1px solid var(--jt-border);
+  border-radius: 10px 10px 0 0;
+  padding: 0 12px;
+  gap: 4px;
+  display: flex;
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+  align-items: center;
+  scrollbar-width: thin;
+}
+
+.jt-root .subtab-btn,
+.jt-root .jt-tabs [data-subtab-btn] {
+  white-space: nowrap;
+  flex: 0 0 auto;
+  border-radius: 0;
+  padding: 8px 14px;
+  font-size: var(--jt-fs-md);
+  font-weight: 600;
+  color: var(--jt-text-3);
+  border: none;
+  border-bottom: 2px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.jt-root .subtab-btn:hover,
+.jt-root .jt-tabs [data-subtab-btn]:hover {
+  background-color: transparent;
+  color: var(--jt-navy);
+}
+
+.jt-root .subtab-btn.active,
+.jt-root .jt-tabs [data-subtab-btn].active {
+  background-color: transparent;
+  color: var(--jt-navy);
+  border-bottom: 2px solid var(--jt-navy);
+  box-shadow: none;
+}
+
+.jt-root .subtab-btn .subtab-badge,
+.jt-root .jt-tabs [data-subtab-btn] .subtab-badge {
+  font-family: var(--jt-font-mono);
+  font-size: var(--jt-fs-sm);
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background-color: var(--jt-surface-2);
+  color: var(--jt-text-2);
+  white-space: nowrap;
+}
+
+.jt-root .subtab-btn.active .subtab-badge,
+.jt-root .jt-tabs [data-subtab-btn].active .subtab-badge {
+  background-color: var(--jt-amber-100);
+  color: #8A5E0B;
+}
+
+/* Barra filtri compatta inline per sezioni interne (es. Gemini Apps D4) */
+.jt-root .jt-ge-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  background-color: var(--jt-surface-2);
+  border: 1px solid var(--jt-border);
+  border-radius: 8px;
+}
+
+.jt-root .jt-ge-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+/* =========================================================================
+ * 10. Componenti Riusabili Fase 3 (SPEC_PROTOTIPO sez. 2 & 4)
+ *     Badge semantici (toneBadge), Card KPI, Pannello Tabella, Dashboard
+ * ========================================================================= */
+
+/* 10.1 Badge e Chip unificati (toneBadge) */
+.jt-root .jt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px !important;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.jt-root .jt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 5px !important;
+  font-size: var(--jt-fs-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.jt-root .jt-badge--green,
+.jt-root .jt-badge--success,
+.jt-root .jt-chip--green,
+.jt-root .jt-chip--success {
+  background-color: #E6F6EC !important;
+  color: #17773F !important;
+  border-color: #BDE5CB !important;
+}
+
+.jt-root .jt-badge--amber,
+.jt-root .jt-badge--warning,
+.jt-root .jt-chip--amber,
+.jt-root .jt-chip--warning {
+  background-color: #FDF3DE !important;
+  color: #8A5E0B !important;
+  border-color: #F0D9A8 !important;
+}
+
+.jt-root .jt-badge--red,
+.jt-root .jt-badge--danger,
+.jt-root .jt-chip--red,
+.jt-root .jt-chip--danger {
+  background-color: #FCEEEC !important;
+  color: #C2362B !important;
+  border-color: #F3C5C1 !important;
+}
+
+.jt-root .jt-badge--blue,
+.jt-root .jt-chip--blue {
+  background-color: #E8EFF8 !important;
+  color: #2E5A8C !important;
+  border-color: #C9D8EC !important;
+}
+
+.jt-root .jt-badge--gray,
+.jt-root .jt-badge--neutral,
+.jt-root .jt-chip--gray,
+.jt-root .jt-chip--neutral {
+  background-color: #F1F4F8 !important;
+  color: #5B6B80 !important;
+  border-color: #D9E0EA !important;
+}
+
+.jt-root .jt-chip--mono {
+  background-color: #F1F4F8 !important;
+  color: #36455A !important;
+  border-color: #D9E0EA !important;
+  font-family: var(--jt-font-mono) !important;
+  font-size: var(--jt-fs-sm);
+}
+
+.jt-root .jt-badge--navy,
+.jt-root .jt-chip--navy {
+  background-color: #0F2A4A !important;
+  color: #FFFFFF !important;
+  border-color: #0F2A4A !important;
+}
+
+.jt-root .jt-badge--purple,
+.jt-root .jt-chip--purple {
+  background-color: #F0EBFA !important;
+  color: #5B3FA0 !important;
+  border-color: #D8CBF2 !important;
+}
+
+/* 10.2 Card KPI (.jt-kpi-grid, .jt-kpi) */
+.jt-root .jt-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+}
+
+.jt-root .jt-kpi-grid.hidden {
+  display: none !important;
+}
+
+.jt-root .jt-kpi {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E3E7EE !important;
+  border-radius: 12px !important;
+  padding: 16px 18px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 1px 2px rgba(15, 42, 74, 0.04) !important;
+}
+
+.jt-root .jt-kpi__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #5B6B80;
+  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.jt-root .jt-kpi__value {
+  font-family: var(--jt-font-mono);
+  font-size: 26px;
+  font-weight: 600;
+  color: #0F2A4A;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.jt-root .jt-kpi__unit {
+  font-family: var(--jt-font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: #5B6B80;
+  margin-left: 4px;
+}
+
+.jt-root .jt-kpi__note {
+  font-size: 12px;
+  color: #5B6B80;
+  line-height: 1.4;
+}
+
+/* 10.3 Pannello Tabella (.jt-table-panel, .jt-table-note, .jt-table-bar, .jt-table) */
+.jt-root .jt-table-panel {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E3E7EE !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  max-width: 100%;
+  box-shadow: 0 1px 2px rgba(15, 42, 74, 0.04) !important;
+}
+
+.jt-root .jt-table-note {
+  padding: 12px 16px !important;
+  background-color: #F4F7FC !important;
+  color: #3A4B60 !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  border-bottom: 1px solid #E3E7EE !important;
+}
+
+.jt-root .jt-table-bar,
+.jt-root .fe-tbl-bar {
+  padding: 12px 16px !important;
+  background-color: #FAFBFD !important;
+  border-bottom: 1px solid #EDF0F4 !important;
+}
+
+.jt-root .jt-btn-primary {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px !important;
+  background-color: #0F2A4A !important;
+  color: #FFFFFF !important;
+  border: 1px solid #0F2A4A !important;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.12s ease;
+}
+
+.jt-root .jt-btn-primary:hover {
+  background-color: #163760 !important;
+}
+
+.jt-root .jt-btn-secondary {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px !important;
+  background-color: #FFFFFF !important;
+  color: #0F2A4A !important;
+  border: 1px solid #D5DCE6 !important;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.12s ease;
+}
+
+.jt-root .jt-btn-secondary:hover {
+  background-color: #EEF2F7 !important;
+}
+
+.jt-root .jt-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.jt-root .fe-sort-arrow,
+.jt-root .fe-sort-indicator.text-\[\#002D62\],
+.jt-root .fe-sort-indicator.text-\[\#0F2A4A\] {
+  color: #8A5E0B !important;
+}
+
+.jt-root .jt-table-footer {
+  padding: 10px 16px !important;
+  font-size: 12px !important;
+  background-color: #FAFBFD !important;
+  border-top: 1px solid #EDF0F4 !important;
+  color: #5B6B80 !important;
+}
+
+/* 10.4 Dashboard Card, Grafici e Barre di Progresso Top List (.jt-dash-card, .jt-progress-*) */
+.jt-root .jt-dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 16px;
+}
+
+.jt-root .jt-dash-card {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E3E7EE !important;
+  border-radius: 12px !important;
+  padding: 18px 20px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 1px 2px rgba(15, 42, 74, 0.04) !important;
+}
+
+.jt-root .jt-dash-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.jt-root .jt-dash-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0F2A4A;
+}
+
+.jt-root .jt-dash-card__meta {
+  font-family: var(--jt-font-mono);
+  font-size: 12px;
+  color: #5B6B80;
+}
+
+.jt-root .jt-progress-track {
+  width: 100%;
+  height: 6px;
+  background-color: #E6EBF2 !important;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.jt-root .jt-progress-fill {
+  height: 100%;
+  background-color: #0F2A4A !important;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.jt-root .jt-progress-fill--amber {
+  background-color: #F2B544 !important;
+}
+
+.jt-root .jt-progress-fill--blue {
+  background-color: #2E5A8C !important;
+}
+
+/* =========================================================================
+ * 11. Drawer di Dettaglio (ex Modali — Fase 4, SPEC_PROTOTIPO sez. 5)
+ *     #project-modal, #user-modal, #gemini-inspector-modal
+ * ========================================================================= */
+
+.jt-root .jt-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60 !important;
+  background-color: rgba(15, 42, 74, 0.35) !important;
+  backdrop-filter: blur(2px);
+  padding: 0 !important;
+  justify-content: flex-end !important;
+  align-items: stretch !important;
+}
+
+.jt-root .jt-drawer-backdrop.hidden {
+  display: none !important;
+}
+
+.jt-root .jt-drawer {
+  width: min(980px, 95vw) !important;
+  max-width: 100vw !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  margin-left: auto !important;
+  background-color: #FFFFFF !important;
+  border-radius: 0 !important;
+  border-left: 1px solid #E3E7EE !important;
+  box-shadow: -8px 0 32px rgba(15, 42, 74, 0.16) !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: jt-drawer-slide-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes jt-drawer-slide-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0.85;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.jt-root .jt-drawer__header {
+  background-color: #0F2A4A !important;
+  color: #FFFFFF !important;
+  padding: 20px 24px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.jt-root .jt-drawer__kicker {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  color: #9FB0C6 !important;
+  line-height: 1.3;
+}
+
+.jt-root .jt-drawer__title {
+  font-family: var(--jt-font-mono) !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  color: #FFFFFF !important;
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+.jt-root .jt-drawer__subtitle {
+  font-family: var(--jt-font-mono);
+  font-size: var(--jt-fs-sm) !important;
+  color: #9FB0C6 !important;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.jt-root .jt-drawer__close {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 8px !important;
+  background-color: rgba(255, 255, 255, 0.10) !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.12s ease;
+}
+
+.jt-root .jt-drawer__close:hover {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.jt-root .jt-drawer__probe-btn {
+  height: 32px !important;
+  padding: 0 12px !important;
+  border-radius: 8px !important;
+  background-color: rgba(242, 181, 68, 0.16) !important;
+  color: #F6CB72 !important;
+  border: 1px solid rgba(242, 181, 68, 0.40) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.jt-root .jt-drawer__probe-btn:hover {
+  background-color: rgba(242, 181, 68, 0.26) !important;
+}
+
+.jt-root .jt-drawer__body {
+  padding: 16px 24px 24px !important;
+  background-color: #FFFFFF !important;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.jt-root .jt-drawer__section-title {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  color: #2E5A8C !important;
+  padding-bottom: 6px !important;
+  border-bottom: 2px solid #E3E7EE !important;
+  margin-bottom: 10px !important;
+}
+
+.jt-root .jt-drawer__body table thead th {
+  font-size: var(--jt-fs-sm) !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+  color: var(--jt-text-3) !important;
+  background-color: #FAFBFD !important;
+  border-bottom: 1px solid var(--jt-border) !important;
+  padding: 9px 12px !important;
+  white-space: nowrap;
+}
+
+.jt-root .jt-drawer__body table tbody td {
+  padding: 9px 12px !important;
+  border-bottom: 1px solid var(--jt-divider) !important;
+  vertical-align: top;
+}
+
+.jt-root .jt-drawer__footer {
+  padding: 12px 24px !important;
+  background-color: #FAFBFD !important;
+  border-top: 1px solid #EDF0F4 !important;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.jt-root .jt-drawer__footer-note {
+  font-size: 12px;
+  color: #5B6B80;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.jt-root .jt-drawer__footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* =========================================================================
+ * 12. Rifinitura Fase 5: Login Screen, Contrasto AA, Responsive & Accessibilità
+ * ========================================================================= */
+
+/* 12.1 Schermata di Login (#janus-login-screen) allineata ai token */
+.jt-root #janus-login-screen {
+  background-color: var(--jt-bg) !important;
+  color: var(--jt-text);
+}
+
+/* 12.2 Contrasto AA (#8A5E0B) per testi ambra su sfondo chiaro */
+.jt-root main .text-amber-500,
+.jt-root main .text-amber-600,
+.jt-root main .text-amber-700,
+.jt-root .jt-drawer .text-amber-500,
+.jt-root .jt-drawer .text-amber-600,
+.jt-root .jt-drawer .text-amber-700 {
+  color: #8A5E0B !important;
+}
+
+/* 12.3 Scorrimento orizzontale sicuro per tutte le tabelle */
+.jt-root .jt-table-panel > .overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 12.5 Colonna bloccata (.jt-sticky-first sulla <table>) e tooltip dei chip compatti ([data-jt-tip]) */
+/* Solo da 768px in su: su schermi stretti la colonna bloccata occuperebbe quasi tutta la larghezza */
+@media (min-width: 768px) {
+  .jt-root .jt-sticky-first thead th:first-child,
+  .jt-root .jt-sticky-first tbody td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background-color: #FFFFFF;
+    box-shadow: 1px 0 0 #E3E7EE;
+  }
+
+  .jt-root .jt-sticky-first thead th:first-child {
+    z-index: 3;
+    background-color: #F8FAFC;
+  }
+
+  .jt-root .jt-sticky-first tbody tr:hover td:first-child {
+    background-color: #F8FAFC;
+  }
+}
+
+.jt-root [data-jt-tip] {
+  cursor: help;
+}
+
+.jt-tip {
+  position: fixed;
+  z-index: 10000;
+  display: none;
+  max-width: 360px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background-color: #0F2A4A;
+  color: #FFFFFF;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(15, 42, 74, 0.25);
+}
+
+/* 12.6 Liste lunghe compatte ed espandibili (jtExpandList) */
+.jt-root .jt-expand__shown,
+.jt-root .jt-expand__more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.jt-root .jt-expand__stack {
+  display: block;
+}
+
+/* Collassata senza display:none: il testo resta in innerText (ricerca, ordinamento, CSV) */
+.jt-root .jt-expand__more.jt-collapsed {
+  max-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Aperta: liste molto lunghe scorrono dentro la cella invece di allungare la riga */
+.jt-root .jt-expand__more:not(.jt-collapsed) {
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.jt-root .jt-expand__btn {
+  margin-top: 3px;
+  padding: 1px 9px;
+  border: 1px solid #D5DCE6;
+  border-radius: 999px;
+  background-color: #F1F4F8;
+  color: #0F2A4A;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.jt-root .jt-expand__btn:hover {
+  background-color: #E3E9F1;
+}
+
+/* 12.4 Responsive Breakpoints (< 1024px, < 768px, < 640px) */
+@media (max-width: 1024px) {
+  .jt-root .jt-dash-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .jt-root .jt-page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .jt-root .jt-page-header__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .jt-root .jt-page-search,
+  .jt-root #search-input {
+    width: 100% !important;
+    max-width: 100%;
+  }
+}
+
+.jt-root .jt-mobile-menu-btn,
+.jt-root .jt-sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .jt-root .jt-header {
+    height: auto;
+    min-height: var(--jt-header-h);
+    flex-wrap: wrap;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .jt-root .jt-mobile-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--jt-white);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .jt-root .jt-mobile-menu-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(242, 181, 68, 0.55);
+  }
+
+  .jt-root .jt-scope {
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .jt-root .jt-header-right {
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .jt-root .jt-sidebar-backdrop.is-open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 44;
+    background: rgba(15, 42, 74, 0.45);
+    backdrop-filter: blur(1px);
+  }
+
+  .jt-root aside.jt-sidebar,
+  .jt-root aside.jt-sidebar.jt-sidebar--collapsed {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 45;
+    width: 260px;
+    min-width: 260px;
+    max-width: 85vw;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: none;
+  }
+
+  .jt-root aside.jt-sidebar.jt-sidebar--mobile-open,
+  .jt-root aside.jt-sidebar.jt-sidebar--collapsed.jt-sidebar--mobile-open {
+    transform: translateX(0);
+    box-shadow: var(--jt-shadow-lg);
+  }
+
+  .jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-nav-group-label,
+  .jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-nav-label,
+  .jt-root aside.jt-sidebar.jt-sidebar--collapsed .gcp-nav-item .nav-badge,
+  .jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-sidebar-extra,
+  .jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-perimeter-box,
+  .jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-collapse-label {
+    display: revert !important;
+  }
+
+  .jt-root aside.jt-sidebar.jt-sidebar--collapsed .gcp-nav-item {
+    justify-content: space-between;
+    padding: 0 10px;
+  }
+
+  .jt-root aside.jt-sidebar.jt-sidebar--collapsed .jt-nav-item__main {
+    justify-content: flex-start;
+    gap: 12px;
+  }
+
+  .jt-root #main-scroll-area {
+    padding: 16px !important;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .jt-root .jt-drawer {
+    width: 100vw !important;
+    border-left: none !important;
+  }
+
+  .jt-root .jt-drawer__header,
+  .jt-root .jt-drawer__body,
+  .jt-root .jt-drawer__footer {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .jt-root .jt-info-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .jt-root .jt-info-banner__actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .jt-root .jt-tabs,
+  .jt-root .subtab-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .jt-root .jt-tabs .subtab-btn,
+  .jt-root .subtab-bar .subtab-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}
+
+/* 12.5 Rispetto preferenze utente per movimento ridotto */
+@media (prefers-reduced-motion: reduce) {
+  .jt-root .jt-sidebar,
+  .jt-root .jt-drawer,
+  .jt-root .jt-progress-fill,
+  .jt-root .gcp-nav-item,
+  .jt-root .subtab-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* =========================================================================
+ * 13. Soglia tipografica (PIANO_CORREZIONI_DESIGN — Task A1)
+ *     Nessun testo visibile sotto 12px (var(--jt-fs-sm))
+ * ========================================================================= */
+.jt-root .text-\[8px\],
+.jt-root .text-\[9px\],
+.jt-root .text-\[10px\],
+.jt-root .text-\[11px\],
+.jt-root .jt-readout-k,
+.jt-root .jt-status-detail,
+.jt-root .jt-nav-title,
+.jt-root .jt-date-input {
+  font-size: var(--jt-fs-sm) !important;
+  line-height: 1.4;
+}
+
+.jt-root .jt-brand-sub {
+  font-size: var(--jt-fs-sm) !important;
+  line-height: 1;
+}
+
+.jt-root main span.rounded-full,
+.jt-root main span.rounded,
+.jt-root main span.rounded-md {
+  white-space: nowrap;
+}
+
+/* =========================================================================
+ * 14. Icone lineari SVG (PIANO_CORREZIONI_DESIGN — Task B2)
+ * ========================================================================= */
+.jt-ico {
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  vertical-align: -0.15em;
+  flex-shrink: 0;
+  stroke: currentColor;
+  fill: none;
+}
+
+/* =========================================================================
+ * 15. Striscia riassuntiva periodo per viste non-dashboard (Task D1)
+ * ========================================================================= */
+.jt-root .jt-summary-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 32px;
+  padding: 5px 12px;
+  background-color: var(--jt-surface);
+  border: 1px solid var(--jt-border);
+  border-radius: 8px;
+  font-size: var(--jt-fs-sm);
+  color: var(--jt-text-2);
+  box-shadow: 0 1px 2px rgba(15, 42, 74, 0.03);
+}
+
+.jt-root .jt-summary-strip.hidden {
+  display: none !important;
+}
+
+.jt-root .jt-summary-strip__metrics {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.jt-root .jt-summary-strip__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.jt-root .jt-summary-strip__label {
+  color: var(--jt-text-3);
+  font-weight: 500;
+}
+
+.jt-root .jt-summary-strip__val {
+  color: var(--jt-navy);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.jt-root .jt-summary-strip__sub {
+  color: var(--jt-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.jt-root .jt-summary-strip__sep {
+  color: var(--jt-border);
+}
+
+.jt-root .jt-summary-strip__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--jt-navy);
+  font-size: var(--jt-fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.jt-root .jt-summary-strip__link:hover {
+  background-color: var(--jt-info-bg);
+  color: var(--jt-navy);
+}
+
+/* 20. Sezioni ripiegabili <details data-jt-collapse> (Task D7 — aperte di default) */
+.jt-root .jt-collapse-section > summary.jt-collapse-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 16px;
+  background-color: var(--jt-surface-2);
+  border-bottom: 1px solid var(--jt-divider);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.jt-root .jt-collapse-section > summary.jt-collapse-summary::-webkit-details-marker {
+  display: none;
+}
+
+.jt-root .jt-collapse-section > summary.jt-collapse-summary.jt-collapse-summary--inline {
+  padding: 0 0 8px 0;
+  background-color: transparent;
+}
+
+.jt-root .jt-collapse-section:not([open]) > summary.jt-collapse-summary {
+  border-bottom-color: transparent;
+}
+
+.jt-root .jt-collapse-summary__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--jt-fs-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--jt-navy);
+}
+
+.jt-root .jt-collapse-summary__hint {
+  font-size: var(--jt-fs-sm);
+  color: var(--jt-text-3);
+  font-weight: 500;
+}
+
+/* =========================================================================
+ * 21. Barra Filtri Sticky Globale (#jt-filterbar) e Pannello Filtri (#jt-m-filters)
+ * ========================================================================= */
+.jt-root {
+  --jt-surface-raised: var(--jt-surface);
+  --jt-border-strong: #D5DCE6;
+  --jt-border-focus: var(--jt-amber-700);
+  --jt-text-muted: var(--jt-text-3);
+  --jt-brand: var(--jt-amber-700);
+  --jt-brand-soft: var(--jt-amber-100);
+  --jt-brand-ink: #8A5E0B;
+  --jt-shadow-xs: 0 1px 2px rgba(15, 42, 74, 0.05);
+  --jt-shadow-md: var(--jt-shadow-menu);
+  --jt-shadow-lg: var(--jt-shadow-menu);
+  --jt-r-sm: var(--jt-radius-sm);
+  --jt-r-md: var(--jt-radius);
+  --jt-r-lg: var(--jt-radius-lg);
+  --jt-r-pill: var(--jt-radius-pill);
+  --jt-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* 21.1 Contenitore sticky .jt-filterbar */
+.jt-root .jt-filterbar {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  background: var(--jt-surface);
+  border-bottom: 1px solid var(--jt-border);
+  box-shadow: var(--jt-shadow-xs);
+  font-family: var(--jt-font-sans);
+}
+
+.jt-root .jt-filterbar.hidden,
+.jt-root .jt-filterbar[hidden] {
+  display: none !important;
+}
+
+/* 21.2 Riga principale .jt-filterbar__main */
+.jt-root .jt-filterbar__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 20px;
+  flex-wrap: nowrap;
+}
+
+.jt-root .jt-filterbar__sep {
+  width: 1px;
+  height: 22px;
+  background: var(--jt-border);
+  flex-shrink: 0;
+}
+
+.jt-root .jt-filterbar__spacer {
+  flex: 1 1 auto;
+  min-width: 4px;
+}
+
+/* 21.2b Controllo segmentato .jt-scope e #custom-date-controls su superficie chiara */
+.jt-root .jt-filterbar .jt-scope {
+  height: 34px;
+  border: 1px solid var(--jt-border);
+  background: var(--jt-surface-2);
+  color: var(--jt-text);
+  min-width: 0;
+}
+
+.jt-root .jt-filterbar .jt-scope-seg + .jt-scope-seg {
+  border-left: 1px solid var(--jt-border);
+}
+
+.jt-root .jt-filterbar .jt-scope-btn {
+  color: var(--jt-text);
+  font-size: 12.5px;
+  transition: background-color 140ms var(--jt-ease);
+}
+
+.jt-root .jt-filterbar .jt-scope-btn:hover {
+  background: var(--jt-surface);
+}
+
+.jt-root .jt-filterbar .jt-scope-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.jt-root .jt-filterbar .jt-scope-label {
+  color: var(--jt-text-muted);
+}
+
+.jt-root .jt-filterbar .jt-scope-btn .jt-chev {
+  stroke: var(--jt-text-muted);
+}
+
+.jt-root .jt-filterbar .jt-badge--amber-dark {
+  background: var(--jt-brand-soft);
+  color: var(--jt-brand-ink);
+  border: 1px solid rgba(184, 132, 31, 0.25);
+}
+
+.jt-root .jt-filterbar #custom-date-controls .jt-date-input {
+  background: var(--jt-surface-2);
+  color: var(--jt-text);
+  border: 1px solid var(--jt-border);
+  height: 32px;
+  border-radius: var(--jt-r-sm);
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.jt-root .jt-filterbar #custom-date-controls span {
+  color: var(--jt-text-muted) !important;
+}
+
+/* 21.3 Pulsante Filtri .jt-filterbar-btn e badge .jt-filterbar-count */
+.jt-root .jt-filterbar__dropdown-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.jt-root .jt-filterbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--jt-r-sm);
+  border: 1px solid var(--jt-border);
+  background: var(--jt-surface-2);
+  color: var(--jt-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 140ms var(--jt-ease);
+}
+
+.jt-root .jt-filterbar-btn:hover,
+.jt-root .jt-filterbar-btn[aria-expanded="true"] {
+  border-color: var(--jt-brand);
+  background: var(--jt-surface);
+}
+
+.jt-root .jt-filterbar-btn:focus-visible {
+  outline: 2px solid var(--jt-border-focus);
+  outline-offset: 1px;
+}
+
+.jt-root .jt-filterbar-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--jt-r-pill);
+  background: var(--jt-brand);
+  color: #fff;
+  font-family: var(--jt-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.jt-root .jt-filterbar-count.hidden,
+.jt-root .jt-filterbar-count[hidden] {
+  display: none !important;
+}
+
+/* 21.4 Pannello a tendina .jt-filterbar-panel (#jt-m-filters) */
+.jt-root .jt-filterbar-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 560px;
+  max-width: 680px;
+  padding: 14px 16px;
+  background: var(--jt-surface-raised);
+  border: 1px solid var(--jt-border-strong);
+  border-radius: var(--jt-r-md);
+  box-shadow: var(--jt-shadow-md);
+  z-index: 60;
+}
+
+.jt-root .jt-filterbar-panel.hidden,
+.jt-root .jt-filterbar-panel[hidden] {
+  display: none !important;
+}
+
+.jt-root .jt-filterbar-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--jt-border);
+}
+
+.jt-root .jt-filterbar-panel__title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--jt-text-2);
+}
+
+.jt-root .jt-filterbar-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--jt-r-sm);
+  border: 1px solid var(--jt-border);
+  background: var(--jt-surface-2);
+  color: var(--jt-text-2);
+  cursor: pointer;
+  transition: all 140ms var(--jt-ease);
+}
+
+.jt-root .jt-filterbar-panel__close:hover {
+  border-color: var(--jt-border-strong);
+  background: var(--jt-surface);
+  color: var(--jt-text);
+}
+
+.jt-root .jt-filterbar-panel__close:focus-visible {
+  outline: 2px solid var(--jt-border-focus);
+  outline-offset: 1px;
+}
+
+.jt-root .jt-filterbar-panel__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.jt-root .jt-filterbar-panel__col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.jt-root .jt-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.jt-root .jt-filter-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--jt-text-2);
+  line-height: 1.35;
+}
+
+.jt-root .jt-filter-select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--jt-r-sm);
+  border: 1px solid var(--jt-border-strong);
+  background: var(--jt-surface);
+  color: var(--jt-text);
+  font-size: 12.5px;
+  transition: border-color 140ms var(--jt-ease), box-shadow 140ms var(--jt-ease);
+}
+
+.jt-root .jt-filter-select:focus {
+  border-color: var(--jt-border-focus);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--jt-brand-soft);
+}
+
+.jt-root .jt-filter-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 2px 0;
+}
+
+.jt-root .jt-filter-check-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--jt-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.jt-root .jt-filter-check-label input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--jt-brand);
+  cursor: pointer;
+}
+
+.jt-root .jt-filter-field.is-disabled,
+.jt-root .jt-filter-toggle-row.is-disabled,
+.jt-root .jt-filter-select:disabled,
+.jt-root .jt-filter-check-label input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.jt-root .jt-filter-field.is-disabled .jt-filter-select,
+.jt-root .jt-filter-toggle-row.is-disabled .jt-filter-check-label,
+.jt-root .jt-filter-toggle-row.is-disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+.jt-root .jt-filter-na-note {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--jt-text-muted);
+}
+
+.jt-root .jt-filter-na-note.hidden,
+.jt-root .jt-filter-na-note[hidden] {
+  display: none !important;
+}
+
+.jt-root .jt-filterbar-panel__footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  margin-top: 12px;
+  border-top: 1px solid var(--jt-border);
+}
+
+.jt-root .jt-filterbar-panel__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--jt-r-sm);
+  border: 1px solid var(--jt-border);
+  background: var(--jt-surface-2);
+  color: var(--jt-text-2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 140ms var(--jt-ease);
+}
+
+.jt-root .jt-filterbar-panel__reset:hover {
+  border-color: var(--jt-brand);
+  background: var(--jt-brand-soft);
+  color: var(--jt-brand-ink);
+}
+
+.jt-root .jt-filterbar-panel__reset:focus-visible {
+  outline: 2px solid var(--jt-border-focus);
+  outline-offset: 1px;
+}
+
+/* 21.5 Campo ricerca .jt-filterbar__search e pulsante .jt-filterbar-reset-btn */
+.jt-root .jt-filterbar__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 220px;
+  max-width: 340px;
+  flex: 1 1 240px;
+}
+
+.jt-root .jt-filterbar__search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--jt-text-muted);
+  font-size: 12px;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.jt-root .jt-filterbar__search-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 12px 0 30px;
+  border-radius: var(--jt-r-sm);
+  border: 1px solid var(--jt-border);
+  background: var(--jt-surface-2);
+  color: var(--jt-text);
+  font-size: 12.5px;
+  transition: all 140ms var(--jt-ease);
+}
+
+.jt-root .jt-filterbar__search-input::placeholder {
+  color: var(--jt-text-muted);
+}
+
+.jt-root .jt-filterbar__search-input:focus {
+  background: var(--jt-surface);
+  border-color: var(--jt-border-focus);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--jt-brand-soft);
+}
+
+.jt-root .jt-filterbar__search-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.jt-root .jt-filterbar-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--jt-r-sm);
+  border: 1px solid var(--jt-border);
+  background: transparent;
+  color: var(--jt-text-2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 140ms var(--jt-ease);
+}
+
+.jt-root .jt-filterbar-reset-btn:hover {
+  border-color: var(--jt-brand);
+  background: var(--jt-brand-soft);
+  color: var(--jt-brand-ink);
+}
+
+.jt-root .jt-filterbar-reset-btn:focus-visible {
+  outline: 2px solid var(--jt-border-focus);
+  outline-offset: 1px;
+}
+
+.jt-root .jt-filterbar-reset-btn.hidden,
+.jt-root .jt-filterbar-reset-btn[hidden] {
+  display: none !important;
+}
+
+/* 21.6 Seconda riga chip .jt-filterbar-chips e .jt-filter-chip */
+.jt-root .jt-filterbar-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 20px 8px;
+  border-top: 1px dashed var(--jt-border);
+  background: var(--jt-surface-2);
+}
+
+.jt-root .jt-filterbar-chips.hidden,
+.jt-root .jt-filterbar-chips[hidden] {
+  display: none !important;
+}
+
+.jt-root .jt-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 2px 10px;
+  border-radius: var(--jt-r-pill);
+  background: var(--jt-brand-soft);
+  border: 1px solid rgba(184, 132, 31, 0.30);
+  color: var(--jt-brand-ink);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.jt-root .jt-filter-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--jt-brand-ink);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 120ms var(--jt-ease);
+}
+
+.jt-root .jt-filter-chip__remove:hover {
+  background: rgba(184, 132, 31, 0.18);
+}
+
+.jt-root .jt-filter-chip__remove:focus-visible {
+  outline: 2px solid var(--jt-border-focus);
+  outline-offset: 1px;
+}
+
+/* 21.7 Responsive Breakpoints Filterbar (< 1024px Tablet, < 768px Mobile) */
+@media (max-width: 1023.98px) {
+  .jt-root .jt-filterbar__main {
+    flex-wrap: wrap;
+    padding: 8px 14px;
+  }
+
+  .jt-root .jt-filterbar__search {
+    flex: 1 1 100%;
+    max-width: none;
+    order: 10;
+  }
+
+  .jt-root .jt-filterbar-panel {
+    min-width: min(500px, calc(100vw - 28px));
+  }
+
+  .jt-root .jt-filterbar-chips {
+    padding: 6px 14px 8px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .jt-root .jt-filterbar__main {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .jt-root .jt-filterbar-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100vw;
+    min-width: 0;
+    max-width: 100vw;
+    max-height: 82vh;
+    overflow-y: auto;
+    border-radius: var(--jt-r-lg) var(--jt-r-lg) 0 0;
+    z-index: 80;
+    padding: 16px;
+  }
+
+  .jt-root .jt-filterbar-panel__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .jt-root .jt-filterbar-panel__close {
+    width: 32px;
+    height: 32px;
+    border-color: var(--jt-border-strong);
+    background: var(--jt-surface);
+    color: var(--jt-text);
+  }
+
+  .jt-root .jt-filterbar-chips {
+    padding: 6px 10px 8px;
+  }
+}
+
+
+/* =========================================================================
+ * 22. Demo mode banner (#demo-banner)
+ * ========================================================================= */
+.jt-demo-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 70;
+  padding: 3px 12px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--jt-brand-soft);
+  color: var(--jt-brand-ink);
+  border-top: 1px solid var(--jt-border-strong);
+  pointer-events: none;
+}
+
+.jt-demo-banner.hidden {
+  display: none;
+}

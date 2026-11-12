@@ -1,0 +1,28 @@
+/* JanusTower — design tokens */
+:root{
+  /* brand */
+  --jt-navy:#0F2A4A; --jt-navy-800:#0B2140; --jt-navy-700:#1F4470; --jt-navy-600:#2E5A8C;
+  --jt-amber:#F2B544; --jt-amber-700:#B07A12; --jt-amber-100:#FDF3DE;
+  --jt-white:#FFFFFF;
+  /* neutrals */
+  --jt-bg:#F4F6F9; --jt-surface:#FFFFFF; --jt-surface-2:#F1F4F8;
+  --jt-border:#E3E7EE; --jt-divider:#EDF0F4;
+  --jt-text:#0F2A4A; --jt-text-2:#3A4B60; --jt-text-3:#5B6B80;
+  --jt-on-dark:#FFFFFF; --jt-on-dark-2:#9FB0C6; --jt-on-dark-line:rgba(255,255,255,.14); --jt-on-dark-hover:rgba(255,255,255,.07);
+  /* semantic */
+  --jt-success:#22A55B; --jt-success-on-dark:#4ADE80; --jt-success-bg:#E6F6EC;
+  --jt-warning:#B07A12; --jt-warning-bg:#FDF3DE;
+  --jt-danger:#C2362B; --jt-danger-bg:#FCEEEC;
+  --jt-info:#2E5A8C; --jt-info-bg:#E8EFF8;
+  /* type */
+  --jt-font-sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --jt-font-mono:'JetBrains Mono',ui-monospace,monospace;
+  --jt-font-brand:'Cinzel','Trajan Pro',serif;
+  --jt-font-brand-sub:'Jost','Futura',sans-serif;
+  --jt-fs-xs:11px; --jt-fs-sm:12px; --jt-fs-md:14px; --jt-fs-lg:16px; --jt-fs-xl:20px; --jt-fs-kpi:32px;
+  /* shape & space */
+  --jt-radius-sm:6px; --jt-radius:8px; --jt-radius-lg:12px; --jt-radius-pill:999px;
+  --jt-space-1:4px; --jt-space-2:8px; --jt-space-3:12px; --jt-space-4:16px; --jt-space-5:20px; --jt-space-6:24px; --jt-space-8:32px;
+  --jt-control-h:36px; --jt-header-h:64px;
+  --jt-shadow-menu:0 12px 32px rgba(15,42,74,.18);
+}

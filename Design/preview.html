@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JanusTower — Design system</title>
+<link rel="icon" href="logos/favicon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Jost:wght@400;500&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="components.css">
+<style>body{margin:0}.sec{max-width:1200px;margin:0 auto;padding:40px 24px;display:flex;flex-direction:column;gap:16px}.h{font-family:var(--jt-font-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--jt-text-3)}.row{display:flex;flex-wrap:wrap;gap:16px;align-items:center}.tile{background:#fff;border:1px solid var(--jt-border);border-radius:12px;padding:20px;display:flex;align-items:center;justify-content:center;min-width:120px;min-height:120px}.sw{display:flex;flex-direction:column;gap:6px;font-size:12px;font-family:var(--jt-font-mono)}.sw i{display:block;width:96px;height:56px;border-radius:8px;border:1px solid var(--jt-border)}</style>
+</head><body class="jt-root">
+<div id="hdr"></div>
+<div class="sec"><div class="h">Logos</div><div class="row">
+<div class="tile"><img src="logos/janustower-app-icon.svg" width="96" height="96" alt=""></div>
+<div class="tile"><img src="logos/janustower-mark-on-light.svg" width="96" alt=""></div>
+<div class="tile" style="background:var(--jt-navy)"><img src="logos/janustower-mark-on-dark.svg" width="96" alt=""></div>
+<div class="tile"><img src="logos/janustower-mark-mono-navy.svg" width="96" alt=""></div>
+<div class="tile" style="gap:16px"><img src="logos/favicon.svg" width="32" alt=""><img src="logos/favicon.svg" width="16" height="16" alt=""><img src="logos/favicon-transparent.svg" width="16" alt=""></div>
+</div><div class="row">
+<div class="tile"><img src="logos/janustower-logo-horizontal-on-light.svg" width="360" alt="JanusTower"></div>
+<div class="tile" style="background:var(--jt-navy)"><img src="logos/janustower-logo-horizontal-on-dark.svg" width="360" alt="JanusTower"></div>
+</div></div>
+<div class="sec"><div class="h">Colors</div><div class="row">
+<div class="sw"><i style="background:#0F2A4A"></i>--jt-navy<span style="color:var(--jt-text-3)">#0F2A4A</span></div><div class="sw"><i style="background:#1F4470"></i>--jt-navy-700<span style="color:var(--jt-text-3)">#1F4470</span></div><div class="sw"><i style="background:#F2B544"></i>--jt-amber<span style="color:var(--jt-text-3)">#F2B544</span></div><div class="sw"><i style="background:#B07A12"></i>--jt-amber-700<span style="color:var(--jt-text-3)">#B07A12</span></div><div class="sw"><i style="background:#F4F6F9"></i>--jt-bg<span style="color:var(--jt-text-3)">#F4F6F9</span></div><div class="sw"><i style="background:#E3E7EE"></i>--jt-border<span style="color:var(--jt-text-3)">#E3E7EE</span></div><div class="sw"><i style="background:#5B6B80"></i>--jt-text-3<span style="color:var(--jt-text-3)">#5B6B80</span></div><div class="sw"><i style="background:#22A55B"></i>--jt-success<span style="color:var(--jt-text-3)">#22A55B</span></div><div class="sw"><i style="background:#C2362B"></i>--jt-danger<span style="color:var(--jt-text-3)">#C2362B</span></div>
+</div></div>
+<div class="sec"><div class="h">Buttons & badges</div><div class="row">
+<button type="button" class="jt-btn jt-btn--primary">Scan</button><button type="button" class="jt-btn jt-btn--navy">Apply</button><button type="button" class="jt-btn jt-btn--secondary">Export CSV</button><button type="button" class="jt-btn jt-btn--danger">Delete local data</button>
+<div style="background:var(--jt-navy);padding:12px;border-radius:10px;display:flex;gap:12px"><button type="button" class="jt-btn jt-btn--ghost-dark">Sync <span class="jt-btn-meta">26/45</span><span class="jt-btn-progress" style="width:58%"></span></button><button type="button" class="jt-btn jt-btn--outline-amber">Stop scan</button></div>
+</div><div class="row">
+<span class="jt-badge">31d</span><span class="jt-badge jt-badge--navy">16</span><span class="jt-badge jt-badge--success">44.6%</span><span class="jt-badge jt-badge--warning">Excluded</span><span class="jt-badge jt-badge--danger">200 err 429</span><span class="jt-badge jt-badge--info">2 Model Armor</span>
+</div></div>
+<div class="sec"><div class="h">Sidebar & KPI card</div>
+<div style="display:grid;grid-template-columns:280px minmax(0,1fr);gap:24px;align-items:start">
+<nav class="jt-nav" style="background:#fff;border:1px solid var(--jt-border);border-radius:12px"><div class="jt-nav-title">Cloud AI</div>
+<button type="button" class="jt-nav-item">Dashboard<span class="jt-badge">KPI</span></button>
+<button type="button" class="jt-nav-item" aria-current="page">Projects &amp; Permissions<span class="jt-badge">16</span></button>
+<button type="button" class="jt-nav-item">Synced Projects<span class="jt-badge jt-badge--success">26/45</span></button>
+<button type="button" class="jt-nav-item">Daily Costs<span class="jt-badge">31d</span></button>
+<button type="button" class="jt-nav-item">Keys &amp; Service Acc.<span class="jt-badge">32</span></button></nav>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+<div class="jt-card"><div class="jt-card-head"><span class="jt-card-title">Net AI cost</span><span class="jt-badge">$32.92/day</span></div><div class="jt-kpi"><span class="jt-kpi-value">$1,020.62</span><span class="jt-kpi-alt">€938.15</span></div><div class="jt-card-rows"><span class="jt-card-row">Vertex<b>€807.63</b></span><span class="jt-card-row">Gemini<b>€130.52</b></span><span class="jt-card-row">Infra<b>€182.53</b></span></div></div>
+<div class="jt-card"><div class="jt-card-head"><span class="jt-card-title">AI calls (LLM)</span><span class="jt-badge jt-badge--danger">200 err 429</span></div><div class="jt-kpi"><span class="jt-kpi-value">105,479</span><span class="jt-kpi-unit">requests</span></div><div class="jt-card-rows"><span class="jt-card-row">Vertex<b>353,445</b></span><span class="jt-card-row">AI Studio<b>10,462</b></span></div></div>
+</div></div></div>
+<script>fetch('header.html').then(r=>r.text()).then(t=>{const d=document.getElementById('hdr');d.innerHTML=t;d.querySelectorAll('script').forEach(s=>{const n=document.createElement('script');n.textContent=s.textContent;s.replaceWith(n);});});</script>
+</body></html>

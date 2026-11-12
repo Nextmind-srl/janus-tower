@@ -1,0 +1,13 @@
+{
+  "name": "janustower-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Frontend assets for JanusTower — Cloud AI FinOps & Security Posture Control Tower",
+  "scripts": {
+    "lint": "eslint frontend/js"
+  },
+  "devDependencies": {
+    "eslint": "9.13.0"
+  }
+}

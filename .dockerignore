@@ -1,0 +1,39 @@
+# Git & Version Control
+.git
+.gitignore
+
+# Audit reports & local artifacts
+audit/
+build/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.spec
+_protected_entry.py
+
+# Local secrets & configuration (pass them with --env-file .env at runtime)
+.env
+.env.*
+
+# Local runtime state, OAuth tokens & scan caches (may contain personal data)
+data/*.json
+data/*.csv
+
+# Never needed inside the image (kept out of the build context too)
+backups/
+.claude/
+.github/
+node_modules/
+tests/
+tools/
+docs/
+data/*.bin
+DIARIO.md
+HANDOFF.md
+STATO.md
+PIANO_*.md
+RICHIESTA_*.md
+*.md
+!requirements.txt

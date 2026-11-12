@@ -1,0 +1,68 @@
+<!-- JanusTower header. Requires tokens.css + components.css; logo path relative to this file. -->
+<header class="jt-header">
+  <a class="jt-brand" href="#">
+    <img src="logos/janustower-mark-on-dark.svg" alt="">
+    <span class="jt-brand-text"><span class="jt-brand-name">JANUS</span><span class="jt-brand-sub"><span>T</span><span>O</span><span>W</span><span>E</span><span>R</span></span></span>
+  </a>
+  <div class="jt-header-sep"></div>
+  <div class="jt-scope">
+    <div class="jt-scope-seg">
+      <button type="button" class="jt-scope-btn" data-jt-menu="jt-m-projects" aria-haspopup="menu">
+        <span class="jt-scope-label jt-hide-lg">Scope</span>
+        <span class="jt-scope-value" id="jt-project-label">All visible projects</span>
+        <span class="jt-badge jt-badge--amber-dark" id="jt-project-count">16</span><svg class="jt-chev" viewBox="0 0 12 12" fill="none" stroke="#9FB0C6" stroke-width="1.6"><path d="M3 4.5l3 3 3-3"/></svg>
+      </button>
+      <div class="jt-menu" id="jt-m-projects" role="menu" hidden style="width:280px">
+        <button type="button" class="jt-menu-item" role="menuitemradio" aria-checked="true">All visible projects<span class="jt-menu-meta">16</span></button>
+        <button type="button" class="jt-menu-item" role="menuitemradio" aria-checked="false">Synced only<span class="jt-menu-meta">26/45</span></button>
+      </div>
+    </div>
+    <div class="jt-scope-seg">
+      <button type="button" class="jt-scope-btn" data-jt-menu="jt-m-range" aria-haspopup="menu"><span class="jt-scope-value">Last 30 days</span><svg class="jt-chev" viewBox="0 0 12 12" fill="none" stroke="#9FB0C6" stroke-width="1.6"><path d="M3 4.5l3 3 3-3"/></svg></button>
+      <div class="jt-menu" id="jt-m-range" role="menu" hidden>
+        <button type="button" class="jt-menu-item" role="menuitemradio" aria-checked="false">Last 7 days</button>
+        <button type="button" class="jt-menu-item" role="menuitemradio" aria-checked="true">Last 30 days</button>
+        <button type="button" class="jt-menu-item" role="menuitemradio" aria-checked="false">Last 90 days</button>
+        <button type="button" class="jt-menu-item" role="menuitemradio" aria-checked="false">Custom range…</button>
+      </div>
+    </div>
+  </div>
+  <div class="jt-readout jt-hide-sm">
+    <span class="jt-readout-k">AI spend · 30D</span>
+    <span class="jt-readout-v"><b>$1,020.62</b><span>€938.15</span></span>
+  </div>
+  <div class="jt-header-spacer"></div>
+  <div class="jt-status" title="Last scan 23.15s · window 03/10 → 02/11">
+    <span class="jt-status-main"><span class="jt-dot"></span>Ready · 17:08</span>
+    <span class="jt-status-detail jt-hide-md">23.15s · 03/10 → 02/11</span>
+  </div>
+  <button type="button" class="jt-btn jt-btn--ghost-dark" title="Synced projects">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2.5 6A4.5 4.5 0 0 1 11 4.5M11.5 8A4.5 4.5 0 0 1 3 9.5"/><path d="M11 1.8v2.7H8.3M3 12.2V9.5h2.7"/></svg>
+    <span class="jt-hide-xs">Sync</span><span class="jt-btn-meta">26/45</span>
+    <span class="jt-btn-progress" style="width:58%"></span>
+  </button>
+  <button type="button" class="jt-btn jt-btn--primary" title="Scan active projects">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="6" r="4"/><path d="M9 9l3 3"/></svg>Scan
+  </button>
+  <div style="position:relative">
+    <button type="button" class="jt-avatar-btn" data-jt-menu="jt-m-user" aria-haspopup="menu" title="user@example.com…"><span class="jt-avatar">M</span><svg class="jt-chev" viewBox="0 0 12 12" fill="none" stroke="#9FB0C6" stroke-width="1.6"><path d="M3 4.5l3 3 3-3"/></svg></button>
+    <div class="jt-menu jt-menu--right" id="jt-m-user" role="menu" hidden style="width:280px">
+      <div class="jt-menu-head"><b style="word-break:break-all">user@example.com…</b><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--jt-text-3)"><span class="jt-dot" style="width:7px;height:7px;background:var(--jt-success)"></span>Connected · read-only access</span></div>
+      <button type="button" class="jt-menu-item" role="menuitem">Account</button>
+      <button type="button" class="jt-menu-item" role="menuitem">Sign out</button>
+      <div class="jt-menu-sep"></div>
+      <button type="button" class="jt-menu-item jt-menu-item--danger" role="menuitem">Delete local data…</button>
+    </div>
+  </div>
+</header>
+<script>
+(function(){
+  const close=()=>document.querySelectorAll('.jt-menu').forEach(m=>m.hidden=true);
+  document.addEventListener('click',e=>{
+    const t=e.target.closest('[data-jt-menu]');
+    if(t){const m=document.getElementById(t.dataset.jtMenu);const was=m.hidden;close();m.hidden=!was;e.stopPropagation();return;}
+    if(!e.target.closest('.jt-menu'))close();
+  });
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});
+})();
+</script>

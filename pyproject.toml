@@ -1,0 +1,43 @@
+[project]
+name = "janustower"
+version = "1.0.0"
+description = "JanusTower — Cloud AI FinOps, Shadow AI & Security Posture Control Tower"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "urllib3==2.8.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "S"]
+# Long lines are common in UI/log strings; not enforced.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# backend/*.py are executed in order into ONE shared namespace by server.load_backend_modules():
+# names come from earlier files (F821), imports in config.py serve the other files (F401)
+# and some imports sit next to the code that needs them (E402).
+"backend/*.py" = ["F821", "F401", "E402"]
+# Pre-existing style findings in the scan & cost modules, left as-is so that calculations stay
+# byte-for-byte identical; to be cleaned up in a dedicated change.
+"backend/gcp_discovery.py" = ["B007", "B905"]
+"backend/gemini_enterprise.py" = ["B007", "F841"]
+"backend/project_inspector.py" = ["B007", "E741"]
+"backend/security_posture.py" = ["F541"]
+# False positive (line 129): a user-facing error message assigned to `token_error`, not a password.
+"backend/auth_gcp.py" = ["S105"]
+"tests/*.py" = ["S101"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

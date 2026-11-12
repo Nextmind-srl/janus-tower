@@ -1,0 +1,18 @@
+title = "Gitleaks Configuration — JanusTower"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlist GCP API Key resource metadata UUIDs (apikey:<uuid> is a GCP Cloud Logging/IAM resource UID, not a secret key) and local build/cache directories"
+paths = [
+  '''(^|[\\/])data[\\/].*\.json$''',
+  '''(^|[\\/])audit[\\/].*$''',
+  '''(^|[\\/])backups[\\/].*$''',
+  '''(^|[\\/])dist[\\/].*$''',
+  '''(^|[\\/])build[\\/].*$'''
+]
+regexTarget = "line"
+regexes = [
+  '''apikey:[0-9a-fA-F\-]{16,}'''
+]

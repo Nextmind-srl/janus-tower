@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+      - name: Node is available
+        # The Node-based tests are skipped when `node` is missing; fail loudly instead of passing silently.
+        run: node --version
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install ruff==0.17.4
+      - name: Unit tests
+        # No OAuth client exists on a CI runner, which would switch the app into demo mode on its own;
+        # the tests exercise the real (non-demo) behaviour, so the demo is turned off explicitly.
+        env:
+          JANUSTOWER_DEMO: "0"
+        run: python -m unittest discover -s tests -v
+      - name: Ruff
+        run: ruff check .
+      - name: index.html is up to date
+        env:
+          JANUSTOWER_DEMO: "0"
+        # Regenerates index.html from frontend/ and Design/*.css; any difference fails the build.
+        run: |
+          python -c "import server; server.assemble_frontend_html('.', write_to_disk=True)"
+          git diff --exit-code -- index.html
+
+  frontend-lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+
+  secrets-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      # The gitleaks CLI is used directly instead of gitleaks/gitleaks-action, because the action
+      # requires a GITLEAKS_LICENSE secret for repositories owned by an organization.
+      # Pinned release v8.30.1 (commit 83d9cd684c87d95d656c1458ef04895a7f1cbd8e), verified by SHA-256.
+      - name: Install gitleaks
+        run: |
+          curl -sSfL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+      - name: Scan the full git history
+        run: ./gitleaks git --config .gitleaks.toml --redact --verbose .
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build image
+        run: docker build -t janustower:ci .
+      - name: Start and wait for the healthcheck
+        run: |
+          mkdir data-ci
+          # The bind-mounted folder belongs to the runner user (UID 1001) while the image user has a
+          # different UID, and --cap-drop ALL forbids chown inside the container. Running the container
+          # as the runner's UID:GID mirrors what a real user does on their own machine (a data folder
+          # owned by them) without making the folder world-writable.
+          docker run -d --name janustower-ci -p 127.0.0.1:8095:8095 --read-only --tmpfs /tmp \
+            --user "$(id -u):$(id -g)" \
+            --cap-drop ALL --security-opt no-new-privileges:true -v "$PWD/data-ci:/app/data" \
+            --health-interval 2s --health-start-period 1s janustower:ci
+          for i in $(seq 1 60); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' janustower-ci)" = healthy ] && break
+            sleep 2
+          done
+          status="$(docker inspect -f '{{.State.Health.Status}}' janustower-ci)"
+          if [ "$status" != healthy ]; then docker logs janustower-ci; fi
+          test "$status" = healthy
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8095/)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8095/server.py)" = 404

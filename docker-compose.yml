@@ -1,0 +1,22 @@
+# Run JanusTower locally with one command:  docker compose up -d --build
+# Requires a .env file (copy .env.example and fill in your own OAuth client).
+# The port is published on 127.0.0.1 only and must stay 8095: the OAuth redirect URI is built from it.
+services:
+  janustower:
+    build: .
+    image: janustower:latest
+    container_name: janustower
+    ports:
+      - "127.0.0.1:8095:8095"
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    # Hardening (verified: the app starts and passes its healthcheck with these options)
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped

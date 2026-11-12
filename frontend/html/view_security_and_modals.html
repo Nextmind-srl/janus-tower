@@ -1,0 +1,195 @@
+
+      <!-- =================================================================== -->
+      <!-- VIEW 6: AI SECURITY POSTURE (AI-SPM) & THREAT TELEMETRY             -->
+      <!-- =================================================================== -->
+      <section id="view-security" class="hidden space-y-4">
+        <!-- Block 1: Summary KPI Grid -->
+        <div id="security-kpi-grid" class="jt-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+
+        <!-- Block 2: Horizontal Single-Row Subtab Bar -->
+        <div class="subtab-bar jt-tabs" data-subtab-nav="security">
+          <button type="button" data-jt-click="switchSubTab('security', 'sec-findings')" data-subtab-btn="sec-findings" class="subtab-btn active" title="AI Security Gaps &amp; Remediation CLI">
+            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-alert"/></svg> Security Gaps</span>
+            <span id="subtab-badge-sec-findings" class="subtab-badge">0</span>
+          </button>
+          <button type="button" data-jt-click="switchSubTab('security', 'sec-pillars')" data-subtab-btn="sec-pillars" class="subtab-btn" title="8 Governance Pillars &amp; Runtime Model Armor">
+            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-globe"/></svg> Governance Pillars</span>
+          </button>
+          <button type="button" data-jt-click="switchSubTab('security', 'sec-forensics')" data-subtab-btn="sec-forensics" class="subtab-btn" title="Cloud Logging Forensics &amp; Prompt Audit">
+            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-user"/></svg> Log Forensics</span>
+          </button>
+        </div>
+
+        <!-- Block 3: Active Subtab Panel with Collapsible Open-by-Default Sections -->
+        <div data-subtab-panel="sec-findings" class="space-y-2">
+          <details open data-jt-collapse="sec-findings-panel" class="jt-collapse-section jt-table-panel bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
+            <summary class="jt-collapse-summary">
+              <span class="jt-collapse-summary__title"><svg class="jt-ico" aria-hidden="true"><use href="#ico-alert"/></svg> AI Security Gaps &amp; Remediation CLI (Unified Operational Resolution Center)</span>
+              <span class="jt-collapse-summary__hint">CRITICAL → HIGH → MEDIUM</span>
+            </summary>
+            <div class="jt-table-bar flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50/60">
+              <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter security gaps by severity">
+                <button type="button" id="sec-sev-btn-ALL" data-jt-click="setSecuritySeverityFilter('ALL')" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-[#002D62] text-white cursor-pointer transition">
+                  All (<span id="sec-sev-cnt-all">0</span>)
+                </button>
+                <button type="button" id="sec-sev-btn-CRITICAL" data-jt-click="setSecuritySeverityFilter('CRITICAL')" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100 cursor-pointer transition">
+                  CRITICAL (<span id="sec-sev-cnt-crit">0</span>)
+                </button>
+                <button type="button" id="sec-sev-btn-HIGH" data-jt-click="setSecuritySeverityFilter('HIGH')" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 cursor-pointer transition">
+                  HIGH (<span id="sec-sev-cnt-high">0</span>)
+                </button>
+                <button type="button" id="sec-sev-btn-MEDIUM" data-jt-click="setSecuritySeverityFilter('MEDIUM')" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 cursor-pointer transition">
+                  MEDIUM (<span id="sec-sev-cnt-med">0</span>)
+                </button>
+              </div>
+              <span class="text-[11px] text-slate-500">Click any severity pill to filter findings</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="jt-table w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-200 text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-50">
+                    <th class="py-3 px-4">Severity</th>
+                    <th class="py-3 px-4">GCP Project</th>
+                    <th class="py-3 px-4">Score</th>
+                    <th class="py-3 px-4">Category &amp; Detected Risk</th>
+                    <th class="py-3 px-4">Verification / Remediation CLI Command</th>
+                  </tr>
+                </thead>
+                <tbody id="security-findings-tbody" class="divide-y divide-slate-100 text-xs"></tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+
+        <div data-subtab-panel="sec-pillars" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <details open data-jt-collapse="sec-pillars-telemetry" class="jt-collapse-section jt-dash-card bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-3">
+            <summary class="jt-collapse-summary jt-collapse-summary--inline">
+              <span class="jt-dash-card__title text-xs font-extrabold uppercase tracking-wider text-[#002D62]"><svg class="jt-ico" aria-hidden="true"><use href="#ico-shield"/></svg> Runtime Violation Telemetry (Model Armor Logs)</span>
+              <span class="jt-chip jt-chip--blue">Cloud Logging</span>
+            </summary>
+            <div id="security-threat-telemetry-box" class="space-y-3 pt-2"></div>
+          </details>
+
+          <details open data-jt-collapse="sec-pillars-governance" class="jt-collapse-section jt-dash-card bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-3">
+            <summary class="jt-collapse-summary jt-collapse-summary--inline">
+              <span class="jt-dash-card__title text-xs font-extrabold uppercase tracking-wider text-[#002D62]"><svg class="jt-ico" aria-hidden="true"><use href="#ico-globe"/></svg> 8 AI Governance &amp; GDPR Pillars Coverage</span>
+              <span class="jt-chip jt-chip--green">Zero-Trust &amp; Data Residency</span>
+            </summary>
+            <div id="security-governance-pillars-box" class="space-y-2.5 pt-2"></div>
+          </details>
+        </div>
+
+        <div data-subtab-panel="sec-forensics" class="hidden">
+          <details open data-jt-collapse="sec-forensics-panel" class="jt-collapse-section jt-dash-card bg-white rounded-xl border border-slate-200 p-4 shadow-2xs space-y-3">
+            <summary class="jt-collapse-summary jt-collapse-summary--inline">
+              <span class="jt-dash-card__title text-xs font-extrabold uppercase tracking-wider text-[#002D62]"><svg class="jt-ico" aria-hidden="true"><use href="#ico-user"/></svg> Cloud Logging Forensics &amp; Prompt Audit</span>
+              <span class="jt-collapse-summary__hint">Click to collapse / expand</span>
+            </summary>
+            <div id="security-log-forensics-box" class="space-y-3 pt-2"></div>
+          </details>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- PROJECT INSPECTION DRAWER                                                 -->
+  <!-- ========================================================================= -->
+  <div id="project-modal" role="dialog" aria-modal="true" aria-labelledby="modal-proj-title" data-jt-click="onBackdrop('closeProjectModal')" class="jt-drawer-backdrop fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-end p-0">
+    <div class="jt-drawer bg-white max-w-5xl w-full flex flex-col border-l border-slate-200 shadow-2xl overflow-hidden">
+      <div class="jt-drawer__header px-6 py-4 border-b border-slate-200 flex items-start justify-between bg-[#002D62] text-white">
+        <div>
+          <span class="jt-drawer__kicker text-[10px] uppercase tracking-wider text-blue-200 font-bold">Project Detail · Project Profile, Invoice Reconciliation, Data Residency &amp; IAM Permissions</span>
+          <h2 id="modal-proj-title" tabindex="-1" class="jt-drawer__title text-base font-extrabold text-white mono mt-0.5">—</h2>
+        </div>
+        <button type="button" data-jt-click="closeProjectModal()" aria-label="Close drawer" class="jt-drawer__close text-blue-200 hover:text-white text-lg font-bold px-2 cursor-pointer"><svg class="jt-ico" aria-hidden="true"><use href="#ico-close"/></svg></button>
+      </div>
+      <div id="modal-proj-body" class="jt-drawer__body p-6 overflow-y-auto space-y-6 text-xs text-slate-700 bg-white">
+      </div>
+      <div class="jt-drawer__footer">
+        <span class="jt-drawer__footer-note">Read-only view — Cloud Monitoring, Logging &amp; Billing</span>
+        <div class="jt-drawer__footer-actions">
+          <button type="button" id="modal-proj-use-scope-btn" class="jt-btn-primary cursor-pointer">Use as Scope</button>
+          <button type="button" data-jt-click="closeProjectModal()" class="jt-btn-secondary cursor-pointer">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 360° USER INSPECTION DRAWER (COSTS, PROJECTS, IDE, NOTEBOOKS, KEYS)       -->
+  <!-- ========================================================================= -->
+  <div id="user-modal" role="dialog" aria-modal="true" aria-labelledby="modal-user-title" data-jt-click="onBackdrop('closeUserModal')" class="jt-drawer-backdrop fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-end p-0">
+    <div class="jt-drawer bg-white max-w-5xl w-full flex flex-col border-l border-slate-200 shadow-2xl overflow-hidden">
+      <div class="jt-drawer__header px-6 py-4 border-b border-slate-200 flex items-start justify-between bg-[#002D62] text-white">
+        <div>
+          <span class="jt-drawer__kicker text-[10px] uppercase tracking-wider text-blue-200 font-bold">User Profile · 360° User Forensic Profile • OAuth, API Keys, Antigravity/IDE, Colab &amp; Gemini Apps</span>
+          <h2 id="modal-user-title" tabindex="-1" class="jt-drawer__title text-base font-extrabold text-white mono mt-0.5 flex flex-wrap items-center gap-2">—</h2>
+          <p id="modal-user-subtitle" class="jt-drawer__subtitle text-[11px] text-blue-100 mt-0.5">—</p>
+        </div>
+        <button type="button" data-jt-click="closeUserModal()" aria-label="Close drawer" class="jt-drawer__close text-blue-200 hover:text-white text-lg font-bold px-2 cursor-pointer"><svg class="jt-ico" aria-hidden="true"><use href="#ico-close"/></svg></button>
+      </div>
+      <div id="modal-user-body" class="jt-drawer__body p-6 overflow-y-auto space-y-6 text-xs text-slate-700 bg-white">
+      </div>
+      <div class="jt-drawer__footer">
+        <span class="jt-drawer__footer-note">Read-only view — Cloud Monitoring, Logging &amp; Billing</span>
+        <div class="jt-drawer__footer-actions">
+          <button type="button" data-jt-click="closeUserModal()" class="jt-btn-secondary cursor-pointer">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 360° GEMINI ENTERPRISE INSPECTOR DRAWER (APPS, CONNECTORS, AGENTS & LIVE) -->
+  <!-- ========================================================================= -->
+  <div id="gemini-inspector-modal" role="dialog" aria-modal="true" aria-labelledby="gemini-inspector-modal-title" data-jt-click="onBackdrop('closeGeminiInspectorModal')" class="jt-drawer-backdrop fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-end p-0">
+    <div class="jt-drawer bg-white max-w-6xl w-full flex flex-col border-l border-slate-200 shadow-2xl overflow-hidden">
+      <div class="jt-drawer__header px-6 py-4 border-b border-slate-200 flex items-start justify-between bg-[#002D62] text-white">
+        <div>
+          <span id="modal-ge-kicker" class="jt-drawer__kicker text-[10px] uppercase tracking-wider text-blue-200 font-bold">360° Gemini Enterprise Inspector • Configurations, Feature Flags, Connectors &amp; Agents</span>
+          <h2 id="gemini-inspector-modal-title" tabindex="-1" class="jt-drawer__title text-base font-extrabold text-white mono mt-0.5 flex flex-wrap items-center gap-2">—</h2>
+          <p id="gemini-inspector-modal-subtitle" class="jt-drawer__subtitle text-[11px] text-blue-100 mt-0.5">—</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button" id="gemini-inspector-live-probe-btn" class="jt-drawer__probe-btn px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-xs cursor-pointer transition"><svg class="jt-ico" aria-hidden="true"><use href="#ico-bolt"/></svg> Run Live v1alpha API Probe</button>
+          <button type="button" data-jt-click="closeGeminiInspectorModal()" aria-label="Close drawer" class="jt-drawer__close text-blue-200 hover:text-white text-lg font-bold px-2 cursor-pointer"><svg class="jt-ico" aria-hidden="true"><use href="#ico-close"/></svg></button>
+        </div>
+      </div>
+      <div id="gemini-inspector-modal-body" class="jt-drawer__body p-6 overflow-y-auto space-y-5 text-xs text-slate-700 bg-white">
+      </div>
+      <div class="jt-drawer__footer">
+        <span class="jt-drawer__footer-note">Read-only view — Discovery Engine v1alpha/v1beta &amp; Cloud Audit Logs</span>
+        <div class="jt-drawer__footer-actions">
+          <button type="button" data-jt-click="closeGeminiInspectorModal()" class="jt-btn-secondary cursor-pointer">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODEL RATE & SKU INSPECTOR / MANUAL OVERRIDE DRAWER                       -->
+  <!-- ========================================================================= -->
+  <div id="pricing-model-modal" role="dialog" aria-modal="true" aria-labelledby="modal-pricing-model-title" data-jt-click="onBackdrop('closePricingModelDrawer')" class="jt-drawer-backdrop fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-end p-0">
+    <div class="jt-drawer bg-white max-w-4xl w-full flex flex-col border-l border-slate-200 shadow-2xl overflow-hidden">
+      <div class="jt-drawer__header px-6 py-4 border-b border-slate-200 flex items-start justify-between bg-[#0F2A4A] text-white">
+        <div>
+          <span id="modal-pricing-model-kicker" class="jt-drawer__kicker text-xs uppercase tracking-wider text-blue-200 font-bold">Model Rate Inspector · Cloud Billing SKUs, Deterministic Cost Example &amp; Manual Override</span>
+          <h2 id="modal-pricing-model-title" tabindex="-1" class="jt-drawer__title text-base font-extrabold text-white mono mt-0.5 flex flex-wrap items-center gap-2">—</h2>
+          <p id="modal-pricing-model-subtitle" class="jt-drawer__subtitle text-xs text-blue-100 mt-0.5">—</p>
+        </div>
+        <button type="button" data-jt-click="closePricingModelDrawer()" aria-label="Close model pricing drawer" class="jt-drawer__close text-blue-200 hover:text-white text-lg font-bold px-2 cursor-pointer"><svg class="jt-ico" aria-hidden="true"><use href="#ico-close"/></svg></button>
+      </div>
+      <div id="modal-pricing-model-body" class="jt-drawer__body p-6 overflow-y-auto space-y-5 text-xs text-slate-700 bg-white">
+      </div>
+      <div class="jt-drawer__footer">
+        <span class="jt-drawer__footer-note">Manual overrides are marked as MANUAL and preserved across Cloud Billing syncs</span>
+        <div class="jt-drawer__footer-actions">
+          <button type="button" data-jt-click="closePricingModelDrawer()" class="jt-btn-secondary cursor-pointer">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+

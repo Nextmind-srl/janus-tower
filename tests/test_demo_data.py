@@ -147,8 +147,6 @@ class TestDemoData(unittest.TestCase):
             c = creds_by_id.get(f"apikey:{k['uid']}")
             if c:
                 self.assertAlmostEqual(k["estimatedCostUsd"], c["estimatedCostUsd"], delta=COST_TOLERANCE, msg=msg)
-        # total bill = AI + infra
-        self.assertAlmostEqual(p["totalBillCostUsd"], cost + p["infraCostUsd"], delta=COST_TOLERANCE, msg=msg)
 
     def test_costs_are_coherent_between_levels(self) -> None:
         for p in self.active_projects():
@@ -160,7 +158,7 @@ class TestDemoData(unittest.TestCase):
         self.assertEqual(s["totalProjects"], len(projects))
         for key in ("totalRequests", "inferenceRequests", "errors429", "totalTokens", "inputTokens", "outputTokens", "cachedTokens"):
             self.assertEqual(s[key], sum(p[key] for p in projects), key)
-        for key in ("estimatedCostUsd", "vertexCostUsd", "geminiCostUsd", "otherAiCostUsd", "infraCostUsd", "totalBillCostUsd"):
+        for key in ("estimatedCostUsd", "vertexCostUsd", "geminiCostUsd", "otherAiCostUsd"):
             self.assertAlmostEqual(s[key], sum(p[key] for p in projects), delta=COST_TOLERANCE, msg=key)
         tl = self.payload["timeline"]
         self.assertAlmostEqual(s["estimatedCostUsd"], sum(t["costUsd"] for t in tl), delta=COST_TOLERANCE)
@@ -183,7 +181,7 @@ class TestDemoData(unittest.TestCase):
         ):
             self.assertEqual(self.payload["summary"][key], rebuilt["summary"][key], key)
         for key in (
-            "vertexCostUsd", "geminiCostUsd", "otherAiCostUsd", "estimatedCostUsd", "infraCostUsd", "totalBillCostUsd", "totalUsersCostUsd",
+            "vertexCostUsd", "geminiCostUsd", "otherAiCostUsd", "estimatedCostUsd", "totalUsersCostUsd",
             "totalApiKeysCostUsd", "totalOauthCostUsd", "totalServiceAccountsCostUsd",
         ):
             self.assertAlmostEqual(self.payload["summary"][key], rebuilt["summary"][key], delta=COST_TOLERANCE, msg=key)
@@ -298,8 +296,8 @@ class TestDemoData(unittest.TestCase):
         s = self.payload["summary"]
         for key in (
             "totalProjects", "billedProjects", "aiEnabledProjects", "totalRequests", "inferenceRequests", "errors429", "totalTokens", "inputTokens",
-            "outputTokens", "cachedTokens", "estimatedCostUsd", "totalBillCostUsd", "infraCostUsd", "vertexCostUsd", "geminiCostUsd", "otherAiCostUsd",
-            "totalApiKeys", "totalServiceAccounts", "totalActiveUsers", "totalTcoUsd", "cacheHitRatePct", "excludedNonAiInfraCostUsd",
+            "outputTokens", "cachedTokens", "estimatedCostUsd", "vertexCostUsd", "geminiCostUsd", "otherAiCostUsd",
+            "totalApiKeys", "totalServiceAccounts", "totalActiveUsers", "cacheHitRatePct",
             "securityPosture", "dataResidency", "finopsExtended", "agentspaceTelemetry", "aiToolsOverview", "serviceAccountsInventory",
             "modelArmorMatrix", "geminiEnterpriseInventory", "mcpAndAgentRegistry", "aiLogForensics", "httpStatusBreakdown", "avgLatencyMs",
         ):
@@ -312,13 +310,13 @@ class TestDemoData(unittest.TestCase):
             self.assertIn(key, fin, key)
         self.assertGreater(s["errors429"], 0)
         self.assertGreater(s["cachedTokens"], 0)
-        self.assertGreater(s["totalBillCostUsd"], s["estimatedCostUsd"])
+        self.assertNotIn("totalBillCostUsd", s)
 
     def test_project_level_fields(self) -> None:
         required = (
             "projectId", "name", "projectNumber", "billingEnabled", "skippedNoBilling", "aiActive", "scanStatus", "enabledAiApis", "vertexFeatures",
             "deployedAiResources", "modelArmor", "permissions", "totalRequests", "inferenceRequests", "errors429", "totalTokens", "estimatedCostUsd",
-            "infraServices", "models", "credentialsUsage", "usersUsage", "apiKeys", "serviceAccounts", "dailySeries", "budgetUsd",
+            "models", "credentialsUsage", "usersUsage", "apiKeys", "serviceAccounts", "dailySeries", "budgetUsd",
             "dataResidency", "finopsExtended", "agentspaceTelemetry", "aiToolsSummary", "aiLogForensics", "aiSecurityPosture",
         )
         for p in self.projects():

@@ -25,14 +25,14 @@ class TestDialogflowSessionTurns(unittest.TestCase):
     def setUp(self) -> None:
         self.ns = load_app_namespace()
 
-    def _run(self, savings_pct: float, hit_pct: float = 0.0, service: str = "dialogflow.googleapis.com") -> dict:
+    def _run(self, savings_pct: float, service: str = "dialogflow.googleapis.com") -> dict:
         ns = self.ns
         with tempfile.TemporaryDirectory() as tmp:
             ns["MODELS_PRICING_FILE"] = str(Path(tmp) / "models_pricing_config.json")
             ns["_MODELS_PRICING_MEM_CACHE"] = {"mtime": 0.0, "data": None}
             cfg = ns["load_models_pricing_config"]()
             cfg.setdefault("billingSettings", {}).update(
-                {"managedServiceSavingsPct": savings_pct, "managedServiceCacheHitRatioPct": hit_pct}
+                {"managedServiceSavingsPct": savings_pct}
             )
             ns["save_models_pricing_config"](cfg)
             ns["_MODELS_PRICING_MEM_CACHE"] = {"mtime": 0.0, "data": None}
@@ -61,7 +61,7 @@ class TestDialogflowSessionTurns(unittest.TestCase):
 
     def test_half_savings_halves_net_keeps_gross(self) -> None:
         gross = self.TURNS * self.RATE
-        out = self._run(50.0, 40.0)
+        out = self._run(50.0)
         r = out["result"]
         self.assertAlmostEqual(r["otherAiGrossCostUsd"], gross, places=9)
         self.assertAlmostEqual(r["otherAiCacheSavingsUsd"], gross / 2.0, places=9)
@@ -72,7 +72,7 @@ class TestDialogflowSessionTurns(unittest.TestCase):
         self.assertAlmostEqual(out["cred"]["grossCostUsd"], gross, places=9)
         self.assertAlmostEqual(out["cred"]["estimatedCostUsd"], gross / 2.0, places=9)
         self.assertAlmostEqual(out["model"]["costUsd"], gross / 2.0, places=9)
-        self.assertEqual(r["cachedTokens"], 0)  # nessun token stimato: cache hit solo informativa
+        self.assertEqual(r["cachedTokens"], 0)  # servizio a chiamata: nessuna quota di token in cache
 
     def test_full_savings_zero_net_usage_unchanged(self) -> None:
         gross = self.TURNS * self.RATE

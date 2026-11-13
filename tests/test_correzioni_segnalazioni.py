@@ -29,15 +29,14 @@ class TestDockerTema(unittest.TestCase):
 
 class TestFatturaNonNelCodice(unittest.TestCase):
     def test_nessun_importo_ne_nome_istanza_nel_sorgente(self):
-        for rel in ("backend/project_inspector.py", "backend/infra_costs.py"):
+        for rel in ("backend/project_inspector.py",):
             src = (ROOT / rel).read_text(encoding="utf-8")
             for needle in ("agentspace-pgvector", "agentspace-redis", "BILLING_30D_INFRA_SERVICES_SPEC", "infra_billing_spec"):
                 self.assertNotIn(needle, src, rel)
             self.assertIsNone(re.search(r'"gross30d":\s*\d', src), f"importi di fattura in {rel}")
-        for rel in ("tests/test_infra_costs.py", "tests/test_infra_costs_minor.py"):
-            src = (ROOT / rel).read_text(encoding="utf-8")
-            self.assertNotIn("export di fatturazione reale", src, rel)
-            self.assertNotIn("1.17 /", src, rel)
+        # the infrastructure cost modules were removed: only AI costs are estimated
+        for rel in ("backend/infra_costs.py", "backend/infra_costs_minor.py"):
+            self.assertFalse((ROOT / rel).exists(), rel)
 
 
 @unittest.skipUnless(shutil.which("node"), "node non disponibile")

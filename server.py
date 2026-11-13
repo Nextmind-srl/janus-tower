@@ -12,8 +12,6 @@ BACKEND_MODULES = [
     "backend/auth_gcp.py",
     "backend/gemini_enterprise.py",
     "backend/gcp_discovery.py",
-    "backend/infra_costs.py",
-    "backend/infra_costs_minor.py",
     "backend/project_inspector.py",
     "backend/security_posture.py",
     "backend/sync_registry.py",

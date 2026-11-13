@@ -108,15 +108,6 @@ def _init_project_inspection_dict(proj: dict, budgets: dict) -> dict:
         "otherAiCostUsd": 0.0,
         "estimatedCostUsd": 0.0,
         "costUsd": 0.0,
-        "infraServices": [],
-        "infraGrossCostUsd": 0.0,
-        "infraSavingsUsd": 0.0,
-        "infraCostUsd": 0.0,
-        "excludedNonAiInfraCostUsd": 0.0,
-        "totalBillGrossUsd": 0.0,
-        "totalBillSavingsUsd": 0.0,
-        "totalBillCostUsd": 0.0,
-        "totalTcoUsd": 0.0,
         "models": {},
         "credentialsUsage": {},
         "usersUsage": [],
@@ -469,12 +460,11 @@ def _apply_managed_ai_service_point(
     if service in ("discoveryengine.googleapis.com", "cloudaicompanion.googleapis.com", "geminicloudassist.googleapis.com", "dialogflow.googleapis.com", "ces.googleapis.com"):
         bs_ms = get_billing_settings()
         sav_ratio = max(0.0, min(1.0, float(bs_ms.get("managedServiceSavingsPct", 0.0) or 0.0) / 100.0))
-        hit_ratio = max(0.0, min(0.98, float(bs_ms.get("managedServiceCacheHitRatioPct", 0.0) or 0.0) / 100.0))
         est_sav = est_gross * sav_ratio
-        est_cache_tok = int(round(est_in * hit_ratio))
     else:
         est_sav = 0.0
-        est_cache_tok = 0
+    # Per-call services are billed per request: no cached-token share is estimated for them
+    est_cache_tok = 0
     est_cost = est_gross - est_sav
 
     for bucket in (p_day, c_day):
@@ -1279,11 +1269,10 @@ def _process_dialogflow_llm_tokens(
         )
     ]
     df_daily_tokens = {}
-    # Stessa impostazione dei servizi gestiti (A4): risparmio 0-100% (100 = non addebitato) e cache hit.
+    # Stessa impostazione dei servizi gestiti (A4): risparmio 0-100% (100 = non addebitato).
     # Le tariffe restano quelle stimate del modello, senza sconto Vertex (applicato solo ai token Vertex).
     bs_df = get_billing_settings()
     sav_ratio = max(0.0, min(1.0, float(bs_df.get("managedServiceSavingsPct", 0.0) or 0.0) / 100.0))
-    hit_ratio = max(0.0, min(0.98, float(bs_df.get("managedServiceCacheHitRatioPct", 0.0) or 0.0) / 100.0))
 
     for m_key_df, m_filter, grp_fields, loc_key in df_tok_metrics:
         df_series = mon_results.get(m_key_df) if m_key_df in mon_results else fetch_monitoring_timeseries(
@@ -1318,7 +1307,7 @@ def _process_dialogflow_llm_tokens(
                 pt_gross = (val / 1_000_000.0) * blended_rate_per_1m
                 pt_sav = pt_gross * sav_ratio
                 pt_cost = pt_gross - pt_sav
-                pt_cache = int(round(in_tok * hit_ratio))
+                pt_cache = 0  # per-call billing: no cached-token share
                 est_calls = max(1, int(round(val / 3500.0)))
 
                 if end_t:
@@ -1364,7 +1353,7 @@ def _process_dialogflow_llm_tokens(
             tot_gross = (pts_sum / 1_000_000.0) * blended_rate_per_1m
             tot_sav = tot_gross * sav_ratio
             tot_cost = tot_gross - tot_sav
-            tot_cache = int(round(tot_in * hit_ratio))
+            tot_cache = 0
             tot_est_calls = max(1, int(round(pts_sum / 3500.0)))
 
             m_entry["invocations"] += tot_est_calls
@@ -1471,25 +1460,6 @@ def _process_dialogflow_llm_tokens(
             c["cacheSavingsUsd"] = c.get("cacheSavingsUsd", 0.0) + add_sav
             c["estimatedCostUsd"] += add_cost
             c["costSource"] = "DIALOGFLOW_CX_AND_LLM"
-
-
-def _process_ai_infra_backing_services(pid: str, token: str, days: int, all_enabled_services: set, result: dict):
-    """Fixed-cost lines (Cloud SQL, Redis, Compute) estimated from the project's own resources: see infra_costs.py."""
-    # Same threshold used later to decide whether a project has a real AI workload: no extra API calls for
-    # projects that only host unrelated infrastructure.
-    if not (
-        float(result.get("estimatedCostUsd", 0.0) or 0.0) >= 0.05
-        or int(result.get("inferenceRequests", 0) or 0) >= 25
-        or int(result.get("totalTokens", 0) or 0) >= 50000
-    ):
-        return
-    breakdown = build_infra_services_breakdown(pid, token, days, all_enabled_services)
-    if not breakdown:
-        return
-    result["infraServices"] = breakdown
-    result["infraGrossCostUsd"] = round(sum(s["grossCostUsd"] for s in breakdown), 4)
-    result["infraSavingsUsd"] = round(sum(s["savingsUsd"] for s in breakdown), 4)
-    result["infraCostUsd"] = round(sum(s["costUsd"] for s in breakdown), 4)
 
 
 def _build_apikey_telemetry_record(
@@ -1910,32 +1880,6 @@ def _finalize_project_inspection_formats_and_totals(
     result["otherAiCostUsd"] = round(result["otherAiCostUsd"], 4)
     result["estimatedCostUsd"] = round(result["estimatedCostUsd"], 4)
     result["costUsd"] = result["estimatedCostUsd"]
-    result["infraGrossCostUsd"] = round(result.get("infraGrossCostUsd", 0.0), 4)
-    result["infraSavingsUsd"] = round(result.get("infraSavingsUsd", 0.0), 4)
-    result["infraCostUsd"] = round(result.get("infraCostUsd", 0.0), 4)
-
-    has_real_ai_workload = (
-        (float(result.get("estimatedCostUsd", 0.0) or 0.0) >= 0.05) or
-        (int(result.get("inferenceRequests", 0) or 0) >= 25) or
-        (int(result.get("totalTokens", 0) or 0) >= 50000)
-    )
-    if not has_real_ai_workload and result["infraCostUsd"] > 0:
-        result["excludedNonAiInfraCostUsd"] = round(float(result.get("excludedNonAiInfraCostUsd", 0.0) or 0.0) + result["infraCostUsd"], 4)
-        result["infraCostUsd"] = 0.0
-        result["infraGrossCostUsd"] = 0.0
-        result["infraSavingsUsd"] = 0.0
-        for inf_s in (result.get("infraServices") or []):
-            inf_s["excludedNonAi"] = True
-            inf_s["note"] = "Excluded from AI TCO (0 AI inferences in the project)"
-    else:
-        result["excludedNonAiInfraCostUsd"] = round(float(result.get("excludedNonAiInfraCostUsd", 0.0) or 0.0), 4)
-
-    ai_gross_total = round(result["vertexGrossCostUsd"] + result["otherAiGrossCostUsd"] + result["geminiGrossCostUsd"], 4)
-    ai_sav_total = round(result["vertexCacheSavingsUsd"] + result["otherAiCacheSavingsUsd"] + result["geminiCacheSavingsUsd"], 4)
-    result["totalBillGrossUsd"] = round(ai_gross_total + result["infraGrossCostUsd"], 4)
-    result["totalBillSavingsUsd"] = round(ai_sav_total + result["infraSavingsUsd"], 4)
-    result["totalBillCostUsd"] = round(result["estimatedCostUsd"] + result["infraCostUsd"], 4)
-    result["totalTcoUsd"] = result["totalBillCostUsd"]
 
     result["permissions"] = build_project_permissions_summary(
         b_status=b_status,
@@ -2041,7 +1985,6 @@ def inspect_single_project(
         mon_results, pid, token, start_iso, end_iso, can_read_monitoring, enabled_services_set,
         su_status, active_locations_seen, features_map, result
     )
-    _process_ai_infra_backing_services(pid, token, days, all_enabled_services, result)
 
     k_status, all_proj_keys, apikey_owners, sa_status, sa_data, prefetched_ma, prefetched_vres, prefetched_user_entries = _parallel_fetch_project_io(
         pid, token, start_dt, end_dt, days, granted_perms, enabled_services_set,
@@ -2082,7 +2025,7 @@ def classify_gcp_region_residency(loc: str) -> str:
     return "NON_EU_US_OTHER"
 
 
-def _enrich_normalize_infra_and_tco(p: dict, days_window: int) -> float:
+def _enrich_normalize_costs(p: dict, days_window: int) -> float:
     if p.get("skippedNoBilling") and p.get("scanStatus") == "SKIPPED_NO_BILLING":
         perms = p.get("permissions") or {}
         if perms.get("accessLevel") == "NO_MONITORING_ACCESS":
@@ -2093,53 +2036,6 @@ def _enrich_normalize_infra_and_tco(p: dict, days_window: int) -> float:
     p["estimatedCostUsd"] = ai_cost_val
     p["costUsd"] = ai_cost_val
 
-    curr_infra_cost = float(p.get("infraCostUsd", 0.0) or 0.0)
-    infra_svcs = p.get("infraServices") or []
-    if days_window < 14 and infra_svcs and any("excludedNonAi" in s for s in infra_svcs):
-        has_real_ai_workload = not all(bool(s.get("excludedNonAi")) for s in infra_svcs)
-    else:
-        has_real_ai_workload = (
-            (ai_cost_val >= 0.05) or
-            (int(p.get("inferenceRequests", 0) or 0) >= 25) or
-            (int(p.get("totalTokens", 0) or 0) >= 50000)
-        )
-    raw_svcs_cost = round(sum(float(s.get("costUsd", s.get("netCostUsd", 0.0)) or 0.0) for s in infra_svcs), 4)
-    if not has_real_ai_workload:
-        if raw_svcs_cost > 0:
-            p["excludedNonAiInfraCostUsd"] = raw_svcs_cost
-        elif curr_infra_cost > 0:
-            p["excludedNonAiInfraCostUsd"] = round(curr_infra_cost, 4)
-        else:
-            p["excludedNonAiInfraCostUsd"] = round(float(p.get("excludedNonAiInfraCostUsd", 0.0) or 0.0), 4)
-        p["infraCostUsd"] = 0.0
-        p["infraGrossCostUsd"] = 0.0
-        p["infraSavingsUsd"] = 0.0
-        for inf_s in infra_svcs:
-            inf_s["excludedNonAi"] = True
-            inf_s["exclusionReason"] = "Excluded from AI TCO (0 active AI inferences in the project)"
-            inf_s["note"] = inf_s.get("estimateNote") or "Excluded from AI TCO (0 active AI inferences in the project)"
-    else:
-        p["excludedNonAiInfraCostUsd"] = 0.0
-        p["infraCostUsd"] = round(curr_infra_cost if curr_infra_cost > 0 else raw_svcs_cost, 4)
-        for inf_s in infra_svcs:
-            inf_s["excludedNonAi"] = False
-
-    ai_gross_tot = round(
-        float(p.get("vertexGrossCostUsd", p.get("vertexCostUsd", 0.0)) or 0.0) +
-        float(p.get("otherAiGrossCostUsd", p.get("otherAiCostUsd", 0.0)) or 0.0) +
-        float(p.get("geminiGrossCostUsd", p.get("geminiCostUsd", 0.0)) or 0.0),
-        4
-    )
-    ai_sav_tot = round(
-        float(p.get("vertexCacheSavingsUsd", 0.0) or 0.0) +
-        float(p.get("otherAiCacheSavingsUsd", 0.0) or 0.0) +
-        float(p.get("geminiCacheSavingsUsd", 0.0) or 0.0),
-        4
-    )
-    p["totalBillGrossUsd"] = round(ai_gross_tot + float(p.get("infraGrossCostUsd", 0.0) or 0.0), 4)
-    p["totalBillSavingsUsd"] = round(ai_sav_tot + float(p.get("infraSavingsUsd", 0.0) or 0.0), 4)
-    p["totalBillCostUsd"] = round(ai_cost_val + float(p.get("infraCostUsd", 0.0) or 0.0), 4)
-    p["totalTcoUsd"] = p["totalBillCostUsd"]
     return ai_cost_val
 
 
@@ -2642,7 +2538,6 @@ def _enrich_finops_extended(p: dict, pid: str, ai_cost_val: float, days_window: 
             })
 
     daily_burn_ai = round(ai_cost_val / days_window, 4)
-    daily_burn_tco = round(float(p.get("totalBillCostUsd", ai_cost_val) or 0.0) / days_window, 4)
 
     p["finopsExtended"] = {
         "cacheHitRatePct": cache_hit_pct,
@@ -2657,10 +2552,7 @@ def _enrich_finops_extended(p: dict, pid: str, ai_cost_val: float, days_window: 
         "zombieReasoningEngines": zombie_engines,
         "zombieReasoningEnginesCount": len(zombie_engines),
         "dailyBurnRateAiUsd": daily_burn_ai,
-        "dailyBurnRateTcoUsd": daily_burn_tco,
         "forecast30dAiUsd": round(daily_burn_ai * 30.0, 2),
-        "forecast30dTcoUsd": round(daily_burn_tco * 30.0, 2),
-        "excludedNonAiInfraCostUsd": round(float(p.get("excludedNonAiInfraCostUsd", 0.0) or 0.0), 4)
     }
 
 def _infer_connector_type(ds_id_or_name: str) -> str:
@@ -3121,7 +3013,7 @@ def enrich_single_project_telemetry(p: dict, scan_days: int = 30):
     now_dt = datetime.now(timezone.utc)
     days_window = max(1, int(p.get("scanDays", scan_days) or 30))
 
-    ai_cost_val = _enrich_normalize_infra_and_tco(p, days_window)
+    ai_cost_val = _enrich_normalize_costs(p, days_window)
     has_ai_studio_key, ai_studio_keys_list = _enrich_apikeys_and_features(p, now_dt)
     notebooklm_feat, notebooklm_project_calls, colab_project_calls = _enrich_users_tools_and_models(p)
     re_groups = _enrich_data_residency(p, pid)

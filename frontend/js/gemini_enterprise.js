@@ -421,9 +421,8 @@
         glCalls: 0, glTok: 0, glCost: 0,
         usCalls: 0, usTok: 0, usCost: 0,
         totInputTok: 0, totCachedTok: 0, totCacheSavings: 0, totExtraPotentialSavings: 0,
-        dailyBurnAi: 0, dailyBurnTco: 0, forecast30dAi: 0, forecast30dTco: 0,
+        dailyBurnAi: 0, forecast30dAi: 0,
         last7Cost: 0, prev7Cost: 0, last7Req: 0, prev7Req: 0,
-        excludedNonAiInfra: 0, realAiInfra: 0,
         allIdleResources: [], allZombieBuilds: [], allNonEuResources: [], allBudgets: [], nonEuProjects: []
       };
 
@@ -461,15 +460,11 @@
         m.totCacheSavings += (fo.cacheSavingsUsd ?? p.cacheSavingsUsd ?? 0);
         m.totExtraPotentialSavings += (fo.potentialExtraCacheSavingsUsd || 0);
         m.dailyBurnAi += (fo.dailyBurnRateAiUsd || 0);
-        m.dailyBurnTco += (fo.dailyBurnRateTcoUsd || 0);
         m.forecast30dAi += (fo.forecast30dAiUsd || 0);
-        m.forecast30dTco += (fo.forecast30dTcoUsd || 0);
         m.last7Cost += (fo.last7dCostUsd || 0);
         m.prev7Cost += (fo.prev7dCostUsd || 0);
         m.last7Req += (fo.last7dRequests || 0);
         m.prev7Req += (fo.prev7dRequests || 0);
-        m.excludedNonAiInfra += (p.excludedNonAiInfraCostUsd ?? fo.excludedNonAiInfraCostUsd ?? 0);
-        m.realAiInfra += (p.infraCostUsd || 0);
 
         (fo.idleResources || []).forEach(ir => m.allIdleResources.push({ ...ir, projectId: ir.projectId || p.projectId }));
         (fo.zombieReasoningEngines || []).forEach(zb => m.allZombieBuilds.push({ ...zb, projectId: zb.projectId || p.projectId }));
@@ -478,14 +473,9 @@
 
       if (isUnfilteredAll) {
         if (sFe.dailyBurnRateAiUsd !== undefined) m.dailyBurnAi = sFe.dailyBurnRateAiUsd;
-        if (sFe.dailyBurnRateTcoUsd !== undefined) m.dailyBurnTco = sFe.dailyBurnRateTcoUsd;
         if (sFe.forecast30dAiUsd !== undefined) m.forecast30dAi = sFe.forecast30dAiUsd;
-        if (sFe.forecast30dTcoUsd !== undefined) m.forecast30dTco = sFe.forecast30dTcoUsd;
         if (sFe.last7dCostUsd !== undefined) m.last7Cost = sFe.last7dCostUsd;
         if (sFe.prev7dCostUsd !== undefined) m.prev7Cost = sFe.prev7dCostUsd;
-        if (s.excludedNonAiInfraCostUsd !== undefined) m.excludedNonAiInfra = s.excludedNonAiInfraCostUsd;
-        else if (sFe.excludedNonAiInfraCostUsd !== undefined) m.excludedNonAiInfra = sFe.excludedNonAiInfraCostUsd;
-        if (s.totalInfraCostUsd !== undefined) m.realAiInfra = s.totalInfraCostUsd;
         if (m.allZombieBuilds.length === 0 && (sFe.zombieReasoningEngines || []).length > 0) {
           sFe.zombieReasoningEngines.forEach(zb => m.allZombieBuilds.push(zb));
         }
@@ -512,8 +502,8 @@
       const {
         itCalls, itTok, itCost, euCalls, euTok, euCost, glCalls, glTok, glCost, usCalls, usTok, usCost,
         totInputTok, totCachedTok, totCacheSavings, totExtraPotentialSavings,
-        dailyBurnAi, dailyBurnTco, forecast30dAi, forecast30dTco, last7Cost, prev7Cost,
-        excludedNonAiInfra, realAiInfra, allIdleResources, allZombieBuilds, allNonEuResources, allBudgets, nonEuProjects,
+        dailyBurnAi, forecast30dAi, last7Cost, prev7Cost,
+        allIdleResources, allZombieBuilds, allNonEuResources, allBudgets, nonEuProjects,
         costTrend7dPct, requestsTrend7dPct
       } = m;
 
@@ -528,15 +518,15 @@
       const cacheHitPct = totInputTok > 0 ? Math.round((totCachedTok / totInputTok) * 1000) / 10 : 0;
 
       setSafeHtml(resFinContainer, `
-        <!-- NUOVA RIGA KPI FINOPS PREDITTIVA (4 MINI-CARD COMPATTE) -->
-        <div class="jt-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <!-- NUOVA RIGA KPI FINOPS PREDITTIVA (3 MINI-CARD COMPATTE) -->
+        <div class="jt-kpi-grid grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div class="jt-kpi bg-white rounded-xl border border-slate-200 p-3 shadow-2xs">
             <div class="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
               <span class="jt-kpi__label"><svg class="jt-ico" aria-hidden="true"><use href="#ico-alert"/></svg> DAILY BURN RATE</span>
               <span class="jt-chip jt-chip--blue px-1.5 py-0.5 rounded bg-blue-50 text-[#0F2A4A] mono">DAILY</span>
             </div>
-            <div class="jt-kpi__value text-base font-extrabold text-[#0F2A4A] mono mt-1">$${dailyBurnAi.toFixed(2)}/d AI <span class="text-slate-300">|</span> <span class="text-slate-800">$${dailyBurnTco.toFixed(2)}/d TCO</span></div>
-            <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">Net AI vs TCO (incl. AI Infra)</div>
+            <div class="jt-kpi__value text-base font-extrabold text-[#0F2A4A] mono mt-1">$${dailyBurnAi.toFixed(2)}/d AI</div>
+            <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">Net AI cost per day</div>
           </div>
 
           <div class="jt-kpi bg-white rounded-xl border border-slate-200 p-3 shadow-2xs">
@@ -544,8 +534,8 @@
               <span class="jt-kpi__label"><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> 30-DAY FORECAST</span>
               <span class="jt-chip jt-chip--purple px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 mono">30D PROJ</span>
             </div>
-            <div class="jt-kpi__value text-base font-extrabold text-indigo-900 mono mt-1">${fmtUsd(forecast30dAi)} AI <span class="text-slate-300">|</span> <span class="text-slate-900">${fmtUsd(forecast30dTco)} TCO</span></div>
-            <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">Monthly estimate (${fmtEur(forecast30dTco)} TCO)</div>
+            <div class="jt-kpi__value text-base font-extrabold text-indigo-900 mono mt-1">${fmtUsd(forecast30dAi)} AI</div>
+            <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">Monthly estimate (${fmtEur(forecast30dAi)})</div>
           </div>
 
           <div class="jt-kpi bg-white rounded-xl border border-slate-200 p-3 shadow-2xs">
@@ -557,14 +547,6 @@
             <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">${fmtUsd(last7Cost)} (last 7d) vs ${fmtUsd(prev7Cost)} (prev. 7d)</div>
           </div>
 
-          <div class="jt-kpi bg-white rounded-xl border border-emerald-200 p-3 shadow-2xs">
-            <div class="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-emerald-800">
-              <span class="jt-kpi__label"><svg class="jt-ico" aria-hidden="true"><use href="#ico-shield"/></svg> FALSE INFRA COST FILTER</span>
-              <span class="jt-chip jt-chip--green px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 mono">SQL FILTER</span>
-            </div>
-            <div class="jt-kpi__value text-base font-extrabold text-emerald-700 mono mt-1">-${fmtUsd(excludedNonAiInfra)} <span class="text-xs font-bold text-slate-500">excluded</span></div>
-            <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">On projects with 0 AI inferences (<b>${fmtUsd(realAiInfra)}</b> actual AI Infra)</div>
-          </div>
         </div>
 
         <div class="jt-dash-grid grid grid-cols-1 lg:grid-cols-2 gap-4">

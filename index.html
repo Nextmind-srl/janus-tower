@@ -3411,7 +3411,7 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         <!-- KPI 1: Cost -->
         <div class="jt-kpi bg-white rounded-xl border border-slate-200 p-4 shadow-2xs">
           <div class="jt-kpi__label flex items-center justify-between text-xs text-slate-500 font-medium">
-            <span>Net AI Cost &amp; GCP Invoice</span>
+            <span>Net AI Cost</span>
             <span id="kpi-daily-avg-cost" class="mono text-[11px] text-slate-400">($0.00/d)</span>
           </div>
           <div class="mt-1 flex items-baseline gap-2 flex-wrap">
@@ -3424,7 +3424,7 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
           <div class="mt-1.5 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
             <span>Vertex: <b id="kpi-vertex-cost" class="text-slate-700 mono">$0.00</b></span>
             <span>Gemini: <b id="kpi-gemini-cost" class="text-slate-700 mono">$0.00</b></span>
-            <span>Infra (9 srv): <b id="kpi-other-ai-cost" class="text-slate-700 mono">$0.00</b></span>
+            <span title="Gemini Enterprise / Agentspace, NotebookLM, Dialogflow CX, Code Assist, Model Armor">Other AI: <b id="kpi-other-ai-cost" class="text-slate-700 mono">$0.00</b></span>
           </div>
         </div>
 
@@ -6728,13 +6728,6 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
       const pAiSav = (p.vertexCacheSavingsUsd || 0) + (p.geminiCacheSavingsUsd || 0) + (p.otherAiCacheSavingsUsd || 0);
       acc.totalGrossCost += pAiGross;
       acc.totalCacheSavings += pAiSav;
-      acc.infraGrossCost += (p.infraGrossCostUsd || 0);
-      acc.infraSavings += (p.infraSavingsUsd || 0);
-      acc.infraCost += (p.infraCostUsd || 0);
-      acc.excludedNonAiInfraCost += (p.excludedNonAiInfraCostUsd || (p.finopsExtended && p.finopsExtended.excludedNonAiInfraCostUsd) || 0);
-      acc.totalBillGross += (p.totalBillGrossUsd || (pAiGross + (p.infraGrossCostUsd || 0)));
-      acc.totalBillSavings += (p.totalBillSavingsUsd || (pAiSav + (p.infraSavingsUsd || 0)));
-      acc.totalBillCost += (p.totalBillCostUsd || ((p.estimatedCostUsd || 0) + (p.infraCostUsd || 0)));
       acc.infRequests += (p.inferenceRequests || 0);
       acc.sysRequests += (p.systemRequests || 0);
       acc.totalRequests += (p.totalRequests || 0);
@@ -6778,8 +6771,6 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         credBreakdown: [],
         totalCost: 0, vertexCost: 0, geminiCost: 0, otherAiCost: 0,
         totalGrossCost: 0, totalCacheSavings: 0,
-        infraGrossCost: 0, infraSavings: 0, infraCost: 0, excludedNonAiInfraCost: 0,
-        totalBillGross: 0, totalBillSavings: 0, totalBillCost: 0,
         infRequests: 0, sysRequests: 0, totalRequests: 0, errors429: 0,
         vertexRequests: 0, geminiApiRequests: 0,
         inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cachedTokens: 0, totalTokens: 0,
@@ -6829,8 +6820,6 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         selProj, selType, selCred, selModel, excludeSys,
         totalCost: acc.totalCost, vertexCost: acc.vertexCost, geminiCost: acc.geminiCost, otherAiCost: acc.otherAiCost,
         totalGrossCost: acc.totalGrossCost, totalCacheSavings: acc.totalCacheSavings,
-        infraGrossCost: acc.infraGrossCost, infraSavings: acc.infraSavings, infraCost: acc.infraCost, excludedNonAiInfraCost: acc.excludedNonAiInfraCost,
-        totalBillGross: acc.totalBillGross, totalBillSavings: acc.totalBillSavings, totalBillCost: acc.totalBillCost,
         infRequests: acc.infRequests, sysRequests: acc.sysRequests, totalRequests: acc.totalRequests,
         vertexRequests: acc.vertexRequests, geminiApiRequests: acc.geminiApiRequests,
         displayedRequests: excludeSys ? acc.infRequests : acc.totalRequests,
@@ -6877,22 +6866,15 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
 
       const recLine = document.getElementById('kpi-bill-reconciliation-line');
       if (recLine) {
-        const exclVal = agg.excludedNonAiInfraCost || s.excludedNonAiInfraCostUsd || (s.finopsExtended && s.finopsExtended.excludedNonAiInfraCostUsd) || 0;
-        const exclBadge = exclVal > 0 ? ` · ${toneBadge('green', `Excluded Non-AI SQL: -${fmtUsd(exclVal)}`, { chip: true, mono: true, title: 'Cloud SQL on projects with 0 AI calls excluded from AI TCO' })}` : '';
-        if ((agg.infraCost || 0) > 0) {
-          setSafeHtml(recLine, `<span class="text-[#0F2A4A] font-extrabold">Total Invoice (11 srv): ${fmtEur(agg.totalBillCost)}</span> (${fmtUsd(agg.totalBillCost)}) · List: <b>${fmtEur(agg.totalBillGross)}</b> · Discounts: <b class="text-emerald-700">-${fmtEur(agg.totalBillSavings)}</b>${exclBadge}`);
-        } else {
-          setSafeHtml(recLine, `Gross AI: <b>${fmtEur(agg.totalGrossCost)}</b> · Cache Savings: <b class="text-emerald-700">-${fmtEur(agg.totalCacheSavings)}</b>${exclBadge}`);
-        }
+        setSafeHtml(recLine, `Gross AI: <b>${fmtEur(agg.totalGrossCost)}</b> · Cache Savings: <b class="text-emerald-700">-${fmtEur(agg.totalCacheSavings)}</b>`);
       }
 
       const activeDaysCount = agg.timeline.filter(d => d.costUsd > 0 || d.inferenceRequests > 0).length;
       const avgDaily = activeDaysCount > 0 ? (agg.totalCost / activeDaysCount) : 0;
       document.getElementById('kpi-daily-avg-cost').textContent = `Avg: ${fmtUsd(avgDaily)}/day`;
-      const vCombinedUsd = (agg.vertexCost || 0) + (agg.otherAiCost || 0);
-      document.getElementById('kpi-vertex-cost').textContent = `${fmtEur(vCombinedUsd)} (${fmtUsd(vCombinedUsd)})`;
+      document.getElementById('kpi-vertex-cost').textContent = `${fmtEur(agg.vertexCost || 0)} (${fmtUsd(agg.vertexCost || 0)})`;
       document.getElementById('kpi-gemini-cost').textContent = `${fmtEur(agg.geminiCost)} (${fmtUsd(agg.geminiCost)})`;
-      document.getElementById('kpi-other-ai-cost').textContent = `${fmtEur(agg.infraCost || 0)} (${fmtUsd(agg.infraCost || 0)})`;
+      document.getElementById('kpi-other-ai-cost').textContent = `${fmtEur(agg.otherAiCost || 0)} (${fmtUsd(agg.otherAiCost || 0)})`;
 
       document.getElementById('kpi-req-title').textContent = agg.excludeSys ? 'AI Calls (LLM)' : 'Total Calls';
       document.getElementById('kpi-total-requests').textContent = fmtNum(agg.displayedRequests);
@@ -7550,12 +7532,8 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
 
     function _applySummaryOverridesIfUnfiltered(isUnfilteredAll, s, sFe, sDr, sLf, state) {
       if (!isUnfilteredAll) return;
-      if (s.excludedNonAiInfraCostUsd !== undefined) state.excludedNonAiInfraUsd = s.excludedNonAiInfraCostUsd;
-      else if (sFe.excludedNonAiInfraCostUsd !== undefined) state.excludedNonAiInfraUsd = sFe.excludedNonAiInfraCostUsd;
       if (sFe.dailyBurnRateAiUsd !== undefined) state.dailyBurnAiUsd = sFe.dailyBurnRateAiUsd;
-      if (sFe.dailyBurnRateTcoUsd !== undefined) state.dailyBurnTcoUsd = sFe.dailyBurnRateTcoUsd;
       if (sFe.forecast30dAiUsd !== undefined) state.forecast30dAiUsd = sFe.forecast30dAiUsd;
-      if (sFe.forecast30dTcoUsd !== undefined) state.forecast30dTcoUsd = sFe.forecast30dTcoUsd;
       if (sFe.zombieReasoningEnginesCount !== undefined) state.zombieBuildsCount = sFe.zombieReasoningEnginesCount;
       if (sDr.nonEuResourcesCount !== undefined) state.nonEuResCount = sDr.nonEuResourcesCount;
       (sDr.nonEuDeployedResources || []).forEach(nr => { if (nr.location) state.nonEuResRegions.add(nr.location); });
@@ -7586,7 +7564,7 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
       const sLf = s.aiLogForensics || {};
       const isUnfilteredAll = (agg.selProj === 'ALL' && !q);
 
-      let netAiUsd = 0, grossAiUsd = 0, cacheSavedUsd = 0, potentialCacheUsd = 0, infraUsd = 0, idleWasteMonthlyUsd = 0;
+      let netAiUsd = 0, grossAiUsd = 0, cacheSavedUsd = 0, potentialCacheUsd = 0, vertexUsd = 0, geminiUsd = 0, otherAiUsd = 0, idleWasteMonthlyUsd = 0;
       let last7CostUsd = 0, prev7CostUsd = 0, last7Calls = 0, prev7Calls = 0;
       let aiCalls = 0, sysCalls = 0, totTokens = 0, inTokens = 0, outTokens = 0, cachedTokens = 0;
 
@@ -7597,7 +7575,7 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         blindProjs: 0, blindTokens: 0, pubEndpoints: 0, nonCmek: 0, weekendCalls: 0, weekendUsd: 0,
         spikeDays: [], secScores: [], critCount: 0, highCount: 0, medCount: 0,
         secTagCounts: {}, mutationCounts: {}, findingList: [],
-        excludedNonAiInfraUsd: 0, dailyBurnAiUsd: 0, dailyBurnTcoUsd: 0, forecast30dAiUsd: 0, forecast30dTcoUsd: 0,
+        dailyBurnAiUsd: 0, forecast30dAiUsd: 0,
         zombieBuildsCount: 0, nonEuResCount: 0, nonEuResRegions: new Set()
       };
 
@@ -7630,7 +7608,9 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         netAiUsd += cUsd;
         grossAiUsd += Math.max(pAiGross, cUsd + pAiSav);
         cacheSavedUsd += pAiSav;
-        infraUsd += (p.infraCostUsd || 0);
+        vertexUsd += (p.vertexCostUsd || 0);
+        geminiUsd += (p.geminiCostUsd || 0);
+        otherAiUsd += (p.otherAiCostUsd || 0);
         aiCalls += (p.inferenceRequests ?? p.billableRequests ?? 0);
         sysCalls += (p.systemRequests ?? p.systemFreeRequests ?? 0);
         totTokens += (p.totalTokens || 0);
@@ -7640,11 +7620,8 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
 
         potentialCacheUsd += (fe.potentialExtraCacheSavingsUsd || 0);
         idleWasteMonthlyUsd += (fe.estimatedMonthlyIdleWasteUsd || 0);
-        fAcc.excludedNonAiInfraUsd += (p.excludedNonAiInfraCostUsd ?? fe.excludedNonAiInfraCostUsd ?? 0);
         fAcc.dailyBurnAiUsd += (fe.dailyBurnRateAiUsd || 0);
-        fAcc.dailyBurnTcoUsd += (fe.dailyBurnRateTcoUsd || 0);
         fAcc.forecast30dAiUsd += (fe.forecast30dAiUsd || 0);
-        fAcc.forecast30dTcoUsd += (fe.forecast30dTcoUsd || 0);
         last7CostUsd += (fe.last7dCostUsd || 0);
         prev7CostUsd += (fe.prev7dCostUsd || 0);
         last7Calls += (fe.last7dRequests || 0);
@@ -7658,7 +7635,6 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
       const { italyWeight, euWeight, globalWeight, nonEuWeight } = weights;
       fAcc.nonEuResCount = weights.nonEuResCount;
 
-      const totalBillUsd = isUnfilteredAll && s.totalTcoUsd !== undefined ? s.totalTcoUsd : (netAiUsd + infraUsd);
       _applySummaryOverridesIfUnfiltered(isUnfilteredAll, s, sFe, sDr, sLf, fAcc);
 
       const costTrend7dPct = (isUnfilteredAll && sFe.costTrend7dPct !== undefined)
@@ -7704,10 +7680,8 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
       const errPct = (aiCalls + sysCalls + totErrs) > 0 ? ((totErrs / (aiCalls + sysCalls + totErrs)) * 100).toFixed(2) : '0.00';
 
       return {
-        netAiUsd, grossAiUsd, cacheSavedUsd, potentialCacheUsd, infraUsd, idleWasteMonthlyUsd,
-        excludedNonAiInfraUsd: fAcc.excludedNonAiInfraUsd, dailyBurnAiUsd: fAcc.dailyBurnAiUsd,
-        dailyBurnTcoUsd: fAcc.dailyBurnTcoUsd, forecast30dAiUsd: fAcc.forecast30dAiUsd,
-        forecast30dTcoUsd: fAcc.forecast30dTcoUsd, zombieBuildsCount: fAcc.zombieBuildsCount,
+        netAiUsd, grossAiUsd, cacheSavedUsd, potentialCacheUsd, vertexUsd, geminiUsd, otherAiUsd, idleWasteMonthlyUsd,
+        dailyBurnAiUsd: fAcc.dailyBurnAiUsd, forecast30dAiUsd: fAcc.forecast30dAiUsd, zombieBuildsCount: fAcc.zombieBuildsCount,
         nonEuResCount: fAcc.nonEuResCount, nonEuRegionsList, avgLatencyMs,
         http200: fAcc.http200, http429: fAcc.http429, http401_403: fAcc.http401_403,
         http400: fAcc.http400, http5xx: fAcc.http5xx, infErrs: fAcc.infErrs, sysErrs: fAcc.sysErrs,
@@ -7719,7 +7693,7 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         spikeDays: fAcc.spikeDays, critCount: fAcc.critCount, highCount: fAcc.highCount, medCount: fAcc.medCount,
         modelMap, toolMap, regionMap, secTagCounts: fAcc.secTagCounts, mutationCounts: fAcc.mutationCounts,
         userMap, credList, findingList: fAcc.findingList,
-        nonEuWeight, totalBillUsd, costTrend7dPct, requestsTrend7dPct,
+        nonEuWeight, costTrend7dPct, requestsTrend7dPct,
         costTrendArrow, costTrendColor, reqTrendArrow, reqTrendColor,
         costPer1kCalls, costPer1mTokens, cacheHitPct, euPct, itPct, glPct, avgSec, secGrade, totErrs, errPct
       };
@@ -7760,21 +7734,17 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
 
         <div data-jt-click="switchTab('projects')" class="jt-kpi bg-white rounded-xl border border-slate-200 p-3 shadow-2xs cursor-pointer hover:border-blue-400 transition">
           <div class="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> TOTAL INVOICE (AI + INFRA)</span>
-            <span class="jt-chip jt-chip--blue px-1.5 py-0.5 rounded bg-blue-50 text-[#0F2A4A] font-extrabold mono">${fmtEur(d.totalBillUsd)}</span>
+            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> AI COST BY SOURCE</span>
+            <span class="jt-chip jt-chip--blue px-1.5 py-0.5 rounded bg-blue-50 text-[#0F2A4A] font-extrabold mono">${fmtEur(d.netAiUsd)}</span>
           </div>
           <div class="flex items-baseline justify-between mt-1">
-            <div class="jt-kpi__value text-xl font-extrabold text-slate-900 mono">${fmtUsd(d.totalBillUsd)}</div>
-            <span class="text-[10px] text-slate-500 mono">AI: <b class="text-emerald-700">${fmtEur(d.netAiUsd)}</b> + Infra: <b>${fmtEur(d.infraUsd)}</b></span>
+            <div class="jt-kpi__value text-xl font-extrabold text-slate-900 mono">${fmtUsd(d.netAiUsd)}</div>
+            <span class="text-[10px] text-slate-500 mono">Vertex: <b class="text-emerald-700">${fmtUsd(d.vertexUsd)}</b> · Gemini: <b>${fmtUsd(d.geminiUsd)}</b></span>
           </div>
           <div class="jt-kpi__note mt-1 flex items-center justify-between text-[10px] text-slate-500 mono">
-            <span>AI INFRA (9 srv): <b>${fmtUsd(d.infraUsd)} (${fmtEur(d.infraUsd)})</b></span>
+            <span title="Gemini Enterprise / Agentspace, NotebookLM, Dialogflow CX, Code Assist, Model Armor">OTHER AI: <b>${fmtUsd(d.otherAiUsd)}</b></span>
             <span>IDLE: <b class="${d.idleWasteMonthlyUsd > 0 ? 'text-rose-600' : 'text-slate-600'}">$${d.idleWasteMonthlyUsd.toFixed(0)}/m</b></span>
           </div>
-          ${d.excludedNonAiInfraUsd > 0 ? `
-          <div class="mt-1 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[9px] font-bold mono truncate" title="Cloud SQL on projects with 0 AI calls, excluded from AI TCO">
-            Excluded Non-AI SQL: -${fmtUsd(d.excludedNonAiInfraUsd)}
-          </div>` : ''}
         </div>
 
         <div data-jt-click="switchTab('models')" class="jt-kpi bg-white rounded-xl border border-slate-200 p-3 shadow-2xs cursor-pointer hover:border-blue-400 transition">
@@ -8254,12 +8224,9 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
           ? `<span class="${p.totalTokens > 0 ? 'text-slate-800 font-medium' : 'text-slate-400'}">${fmtTok(p.totalTokens)}</span>`
           : `<span class="text-rose-600 font-semibold"><svg class="jt-ico" aria-hidden="true"><use href="#ico-lock"/></svg> 403</span>`;
 
-        const exclSqlUsd = p.excludedNonAiInfraCostUsd ?? (p.finopsExtended && p.finopsExtended.excludedNonAiInfraCostUsd) ?? 0;
         const costHtml = monArea.granted
           ? `<div><span class="text-sm font-extrabold ${p.estimatedCostUsd > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmtUsd(p.estimatedCostUsd)}</span> <span class="text-[11px] font-bold text-slate-600">(${fmtEur(p.estimatedCostUsd)})</span></div>
-             ${isAiStudioFree ? `<div class="text-[10px] text-amber-700 font-semibold">Free-Tier AI Studio</div>` : ''}
-             ${(p.infraCostUsd || 0) > 0 ? `<div class="text-[10px] text-[#0F2A4A] font-semibold">TCO AI: ${fmtEur(p.totalBillCostUsd || ((p.estimatedCostUsd || 0) + (p.infraCostUsd || 0)))} (Infra AI: ${fmtUsd(p.infraCostUsd)})</div>` : ''}
-             ${exclSqlUsd > 0 ? `<div class="text-[10px] text-slate-500 font-semibold mono" title="Project with 0 AI calls: general Cloud SQL/Infra cost unrelated to AI, excluded from AI TCO">Infra AI: <b>$0.00</b> <span class="px-1 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">(Excluded non-AI SQL: $${exclSqlUsd.toFixed(2)})</span></div>` : ''}`
+             ${isAiStudioFree ? `<div class="text-[10px] text-amber-700 font-semibold">Free-Tier AI Studio</div>` : ''}`
           : `<span class="text-rose-600 font-semibold"><svg class="jt-ico" aria-hidden="true"><use href="#ico-lock"/></svg> 403</span>`;
 
         return `
@@ -10474,7 +10441,7 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
       const bSettings = cfg.billingSettings || {};
       const vDisc = Number(bSettings.vertexBillingCreditDiscountPct ?? bSettings.vertexCreditDiscountPct ?? 0);
       const gDisc = Number(bSettings.geminiApiBillingCreditDiscountPct ?? bSettings.geminiApiCreditDiscountPct ?? 0);
-      const iCache = Number(bSettings.vertexImplicitCacheHitRatioPct ?? bSettings.implicitCacheHitPct ?? 0);
+      const iCache = Number(bSettings.vertexImplicitCacheHitRatioPct ?? bSettings.implicitCacheHitPct ?? 93);
       const rMult = Number(bSettings.regionalMultiplierDefault ?? 1.1);
 
       setSafeHtml(bannerEl, `
@@ -10685,7 +10652,7 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
       const bs = cfg.billingSettings || {};
       const vDisc = Number(bs.vertexBillingCreditDiscountPct ?? bs.vertexCreditDiscountPct ?? 0);
       const gDisc = Number(bs.geminiApiBillingCreditDiscountPct ?? bs.geminiApiCreditDiscountPct ?? 0);
-      const iCache = Number(bs.vertexImplicitCacheHitRatioPct ?? bs.implicitCacheHitPct ?? 0);
+      const iCache = Number(bs.vertexImplicitCacheHitRatioPct ?? bs.implicitCacheHitPct ?? 93);
       const rMult = Number(bs.regionalMultiplierDefault ?? 1.1);
       const usdEur = Number(bs.usdToEurRate ?? 0.92);
       const usdEurAuto = bs.usdToEurRateAuto !== false;
@@ -10695,8 +10662,6 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         : 'Google Cloud rate not synced yet: run "Sync from Google Cloud".';
       const gCache = Number(bs.geminiApiImplicitCacheHitRatioPct ?? 0);
       const msSav = Number(bs.managedServiceSavingsPct ?? 0);
-      const infSav = Number(bs.infraSavingsPct ?? 0);
-      const msCache = Number(bs.managedServiceCacheHitRatioPct ?? 0);
 
       setSafeHtml(box, `
         <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-3">
@@ -10705,7 +10670,7 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
               <svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> Billing Settings &amp; Cost Calculation Parameters
             </h3>
             <p class="text-xs text-slate-600 mt-0.5">
-              Defaults are neutral (<code class="mono">0%</code> discounts, <code class="mono">0%</code> implicit cache hit, <code class="mono">1.10×</code> regional multiplier) so estimated costs reflect list prices unless your organization has negotiated discounts.
+              Defaults: <code class="mono">0%</code> discounts, <code class="mono">93%</code> Vertex AI implicit cache hit, <code class="mono">1.10×</code> regional multiplier. Calibrate them on your Cloud Billing export (see Cost calibration). Saving recalculates the cached costs instantly, without a new scan.
             </p>
           </div>
           <div class="flex items-center gap-2">
@@ -10920,57 +10885,7 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
             </div>
           </div>
 
-          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <label for="pricing-cfg-infra-savings" class="block text-xs font-extrabold text-[#0F2A4A]">
-                  Infrastructure savings (%)
-                </label>
-                <p class="text-xs text-slate-600 mt-0.5">
-                  Discount applied to the list-price estimates of Cloud SQL, Memorystore Redis and Compute Engine (negotiated prices, committed use). 0% = public list price (0%–100%).
-                </p>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <input
-                  type="number"
-                  id="pricing-cfg-infra-savings"
-                  aria-label="Infrastructure savings percentage"
-                  min="0"
-                  max="100"
-                  step="0.5"
-                  value="${escapeHtml(infSav)}"
-                  class="w-24 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-right text-xs font-bold mono text-slate-900"
-                />
-                <span class="text-xs font-bold text-slate-500 mono">%</span>
-              </div>
-            </div>
-          </div>
 
-          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <label for="pricing-cfg-managed-cache" class="block text-xs font-extrabold text-[#0F2A4A]">
-                  Managed services cache hit (%)
-                </label>
-                <p class="text-xs text-slate-600 mt-0.5">
-                  Share of input tokens treated as cached for managed-service call estimates (0%–98%).
-                </p>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <input
-                  type="number"
-                  id="pricing-cfg-managed-cache"
-                  aria-label="Managed services cache hit percentage"
-                  min="0"
-                  max="98"
-                  step="0.5"
-                  value="${escapeHtml(msCache)}"
-                  class="w-24 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-right text-xs font-bold mono text-slate-900"
-                />
-                <span class="text-xs font-bold text-slate-500 mono">%</span>
-              </div>
-            </div>
-          </div>
         </div>
       `);
     }
@@ -11024,14 +10939,10 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
       const eAutoEl = document.getElementById('pricing-cfg-usd-eur-auto');
       const gcEl = document.getElementById('pricing-cfg-gemini-cache');
       const msEl = document.getElementById('pricing-cfg-managed-savings');
-      const mcEl = document.getElementById('pricing-cfg-managed-cache');
-      const infEl = document.getElementById('pricing-cfg-infra-savings');
 
       const eVal = Number(eEl ? eEl.value : 0.92);
       const gcVal = Number(gcEl ? gcEl.value : 0);
       const msVal = Number(msEl ? msEl.value : 0);
-      const infVal = Number(infEl ? infEl.value : 0);
-      const mcVal = Number(mcEl ? mcEl.value : 0);
       const vVal = Number(vEl ? vEl.value : 0);
       const gVal = Number(gEl ? gEl.value : 0);
       const cVal = Number(cEl ? cEl.value : 0);
@@ -11067,14 +10978,6 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         _showPricingSettingsFeedback('err', 'Managed services savings must be between 0% and 100%.');
         return;
       }
-      if (Number.isNaN(infVal) || infVal < 0 || infVal > 100) {
-        _showPricingSettingsFeedback('err', 'Infrastructure savings must be between 0% and 100%.');
-        return;
-      }
-      if (Number.isNaN(mcVal) || mcVal < 0 || mcVal > 98) {
-        _showPricingSettingsFeedback('err', 'Managed services cache hit must be between 0% and 98%.');
-        return;
-      }
 
       await _submitBillingSettingsPayload({
         vertexBillingCreditDiscountPct: vVal,
@@ -11084,9 +10987,7 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         usdToEurRate: eVal,
         usdToEurRateAuto: eAutoEl ? !!eAutoEl.checked : true,
         geminiApiImplicitCacheHitRatioPct: gcVal,
-        managedServiceSavingsPct: msVal,
-        infraSavingsPct: infVal,
-        managedServiceCacheHitRatioPct: mcVal
+        managedServiceSavingsPct: msVal
       });
     }
     window.savePricingBillingSettings = savePricingBillingSettings;
@@ -11095,14 +10996,12 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
       await _submitBillingSettingsPayload({
         vertexBillingCreditDiscountPct: 0.0,
         geminiApiBillingCreditDiscountPct: 0.0,
-        vertexImplicitCacheHitRatioPct: 0.0,
+        vertexImplicitCacheHitRatioPct: 93.0,
         regionalMultiplierDefault: 1.10,
         usdToEurRate: 0.92,
         usdToEurRateAuto: true,
         geminiApiImplicitCacheHitRatioPct: 0.0,
-        managedServiceSavingsPct: 0.0,
-        infraSavingsPct: 0.0,
-        managedServiceCacheHitRatioPct: 0.0
+        managedServiceSavingsPct: 0.0
       });
     }
     window.resetPricingBillingSettingsToDefaults = resetPricingBillingSettingsToDefaults;
@@ -12216,9 +12115,8 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         glCalls: 0, glTok: 0, glCost: 0,
         usCalls: 0, usTok: 0, usCost: 0,
         totInputTok: 0, totCachedTok: 0, totCacheSavings: 0, totExtraPotentialSavings: 0,
-        dailyBurnAi: 0, dailyBurnTco: 0, forecast30dAi: 0, forecast30dTco: 0,
+        dailyBurnAi: 0, forecast30dAi: 0,
         last7Cost: 0, prev7Cost: 0, last7Req: 0, prev7Req: 0,
-        excludedNonAiInfra: 0, realAiInfra: 0,
         allIdleResources: [], allZombieBuilds: [], allNonEuResources: [], allBudgets: [], nonEuProjects: []
       };
 
@@ -12256,15 +12154,11 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         m.totCacheSavings += (fo.cacheSavingsUsd ?? p.cacheSavingsUsd ?? 0);
         m.totExtraPotentialSavings += (fo.potentialExtraCacheSavingsUsd || 0);
         m.dailyBurnAi += (fo.dailyBurnRateAiUsd || 0);
-        m.dailyBurnTco += (fo.dailyBurnRateTcoUsd || 0);
         m.forecast30dAi += (fo.forecast30dAiUsd || 0);
-        m.forecast30dTco += (fo.forecast30dTcoUsd || 0);
         m.last7Cost += (fo.last7dCostUsd || 0);
         m.prev7Cost += (fo.prev7dCostUsd || 0);
         m.last7Req += (fo.last7dRequests || 0);
         m.prev7Req += (fo.prev7dRequests || 0);
-        m.excludedNonAiInfra += (p.excludedNonAiInfraCostUsd ?? fo.excludedNonAiInfraCostUsd ?? 0);
-        m.realAiInfra += (p.infraCostUsd || 0);
 
         (fo.idleResources || []).forEach(ir => m.allIdleResources.push({ ...ir, projectId: ir.projectId || p.projectId }));
         (fo.zombieReasoningEngines || []).forEach(zb => m.allZombieBuilds.push({ ...zb, projectId: zb.projectId || p.projectId }));
@@ -12273,14 +12167,9 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
 
       if (isUnfilteredAll) {
         if (sFe.dailyBurnRateAiUsd !== undefined) m.dailyBurnAi = sFe.dailyBurnRateAiUsd;
-        if (sFe.dailyBurnRateTcoUsd !== undefined) m.dailyBurnTco = sFe.dailyBurnRateTcoUsd;
         if (sFe.forecast30dAiUsd !== undefined) m.forecast30dAi = sFe.forecast30dAiUsd;
-        if (sFe.forecast30dTcoUsd !== undefined) m.forecast30dTco = sFe.forecast30dTcoUsd;
         if (sFe.last7dCostUsd !== undefined) m.last7Cost = sFe.last7dCostUsd;
         if (sFe.prev7dCostUsd !== undefined) m.prev7Cost = sFe.prev7dCostUsd;
-        if (s.excludedNonAiInfraCostUsd !== undefined) m.excludedNonAiInfra = s.excludedNonAiInfraCostUsd;
-        else if (sFe.excludedNonAiInfraCostUsd !== undefined) m.excludedNonAiInfra = sFe.excludedNonAiInfraCostUsd;
-        if (s.totalInfraCostUsd !== undefined) m.realAiInfra = s.totalInfraCostUsd;
         if (m.allZombieBuilds.length === 0 && (sFe.zombieReasoningEngines || []).length > 0) {
           sFe.zombieReasoningEngines.forEach(zb => m.allZombieBuilds.push(zb));
         }
@@ -12307,8 +12196,8 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
       const {
         itCalls, itTok, itCost, euCalls, euTok, euCost, glCalls, glTok, glCost, usCalls, usTok, usCost,
         totInputTok, totCachedTok, totCacheSavings, totExtraPotentialSavings,
-        dailyBurnAi, dailyBurnTco, forecast30dAi, forecast30dTco, last7Cost, prev7Cost,
-        excludedNonAiInfra, realAiInfra, allIdleResources, allZombieBuilds, allNonEuResources, allBudgets, nonEuProjects,
+        dailyBurnAi, forecast30dAi, last7Cost, prev7Cost,
+        allIdleResources, allZombieBuilds, allNonEuResources, allBudgets, nonEuProjects,
         costTrend7dPct, requestsTrend7dPct
       } = m;
 
@@ -12323,15 +12212,15 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
       const cacheHitPct = totInputTok > 0 ? Math.round((totCachedTok / totInputTok) * 1000) / 10 : 0;
 
       setSafeHtml(resFinContainer, `
-        <!-- NUOVA RIGA KPI FINOPS PREDITTIVA (4 MINI-CARD COMPATTE) -->
-        <div class="jt-kpi-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <!-- NUOVA RIGA KPI FINOPS PREDITTIVA (3 MINI-CARD COMPATTE) -->
+        <div class="jt-kpi-grid grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div class="jt-kpi bg-white rounded-xl border border-slate-200 p-3 shadow-2xs">
             <div class="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
               <span class="jt-kpi__label"><svg class="jt-ico" aria-hidden="true"><use href="#ico-alert"/></svg> DAILY BURN RATE</span>
               <span class="jt-chip jt-chip--blue px-1.5 py-0.5 rounded bg-blue-50 text-[#0F2A4A] mono">DAILY</span>
             </div>
-            <div class="jt-kpi__value text-base font-extrabold text-[#0F2A4A] mono mt-1">$${dailyBurnAi.toFixed(2)}/d AI <span class="text-slate-300">|</span> <span class="text-slate-800">$${dailyBurnTco.toFixed(2)}/d TCO</span></div>
-            <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">Net AI vs TCO (incl. AI Infra)</div>
+            <div class="jt-kpi__value text-base font-extrabold text-[#0F2A4A] mono mt-1">$${dailyBurnAi.toFixed(2)}/d AI</div>
+            <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">Net AI cost per day</div>
           </div>
 
           <div class="jt-kpi bg-white rounded-xl border border-slate-200 p-3 shadow-2xs">
@@ -12339,8 +12228,8 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
               <span class="jt-kpi__label"><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> 30-DAY FORECAST</span>
               <span class="jt-chip jt-chip--purple px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 mono">30D PROJ</span>
             </div>
-            <div class="jt-kpi__value text-base font-extrabold text-indigo-900 mono mt-1">${fmtUsd(forecast30dAi)} AI <span class="text-slate-300">|</span> <span class="text-slate-900">${fmtUsd(forecast30dTco)} TCO</span></div>
-            <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">Monthly estimate (${fmtEur(forecast30dTco)} TCO)</div>
+            <div class="jt-kpi__value text-base font-extrabold text-indigo-900 mono mt-1">${fmtUsd(forecast30dAi)} AI</div>
+            <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">Monthly estimate (${fmtEur(forecast30dAi)})</div>
           </div>
 
           <div class="jt-kpi bg-white rounded-xl border border-slate-200 p-3 shadow-2xs">
@@ -12352,14 +12241,6 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
             <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">${fmtUsd(last7Cost)} (last 7d) vs ${fmtUsd(prev7Cost)} (prev. 7d)</div>
           </div>
 
-          <div class="jt-kpi bg-white rounded-xl border border-emerald-200 p-3 shadow-2xs">
-            <div class="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-emerald-800">
-              <span class="jt-kpi__label"><svg class="jt-ico" aria-hidden="true"><use href="#ico-shield"/></svg> FALSE INFRA COST FILTER</span>
-              <span class="jt-chip jt-chip--green px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 mono">SQL FILTER</span>
-            </div>
-            <div class="jt-kpi__value text-base font-extrabold text-emerald-700 mono mt-1">-${fmtUsd(excludedNonAiInfra)} <span class="text-xs font-bold text-slate-500">excluded</span></div>
-            <div class="jt-kpi__note text-[10px] text-slate-500 mono mt-0.5">On projects with 0 AI inferences (<b>${fmtUsd(realAiInfra)}</b> actual AI Infra)</div>
-          </div>
         </div>
 
         <div class="jt-dash-grid grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -14600,17 +14481,18 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         saCost, saCalls, saTokens,
         projTotalCost, pctOauth, pctKeys, pctSa
       } = idCosts;
-      const vGross = (p.vertexGrossCostUsd || p.vertexCostUsd || 0) + (p.otherAiGrossCostUsd || p.otherAiCostUsd || 0);
-      const vSav = (p.vertexCacheSavingsUsd || 0) + (p.otherAiCacheSavingsUsd || 0);
-      const vNet = (p.vertexCostUsd || 0) + (p.otherAiCostUsd || 0);
+      const vGross = p.vertexGrossCostUsd || p.vertexCostUsd || 0;
+      const vSav = p.vertexCacheSavingsUsd || 0;
+      const vNet = p.vertexCostUsd || 0;
       const gGross = p.geminiGrossCostUsd || p.geminiCostUsd || 0;
       const gSav = p.geminiCacheSavingsUsd || 0;
       const gNet = p.geminiCostUsd || 0;
-      const infList = p.infraServices || [];
-      const exclNonAiUsd = p.excludedNonAiInfraCostUsd ?? (p.finopsExtended && p.finopsExtended.excludedNonAiInfraCostUsd) ?? 0;
-      const billGross = p.totalBillGrossUsd || (vGross + gGross + (p.infraGrossCostUsd || 0));
-      const billSav = p.totalBillSavingsUsd || (vSav + gSav + (p.infraSavingsUsd || 0));
-      const billNet = p.totalBillCostUsd || (vNet + gNet + (p.infraCostUsd || 0));
+      const oGross = p.otherAiGrossCostUsd || p.otherAiCostUsd || 0;
+      const oSav = p.otherAiCacheSavingsUsd || 0;
+      const oNet = p.otherAiCostUsd || 0;
+      const billGross = vGross + gGross + oGross;
+      const billSav = vSav + gSav + oSav;
+      const billNet = vNet + gNet + oNet;
 
       const dynamicVertexModelsLabel = (p.models || [])
         .filter(m => !(m.modelId || '').includes('AI Studio'))
@@ -14619,44 +14501,12 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
         .join(' / ') || 'Vertex AI & Discovery Engine Models';
 
       const tdGrossClass = 'py-2 px-3 text-right mono text-slate-700';
-      const infraRowsHtml = infList.map(inf => {
-        const sName = inf.shortName || inf.name || inf.serviceName || inf.service || 'Cloud Infrastructure';
-        const sIdBadge = inf.serviceId ? `<span class="jt-chip jt-chip--gray ml-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 text-[9px] font-bold mono">${escapeHtml(inf.serviceId)}</span>` : '';
-        const isExcl = Boolean(inf.excludedNonAi);
-        const sDet = inf.details || [
-          Array.isArray(inf.instances) ? inf.instances.join(', ') : (inf.instances ? `${inf.instances} instances` : ''),
-          (inf.locations || []).length > 0 ? inf.locations.join(', ') : '',
-          inf.activeDays ? `${inf.activeDays} active days` : '',
-          inf.exclusionReason || ''
-        ].filter(Boolean).join(' · ') || 'Related service';
-        const sNet = inf.costUsd ?? inf.netCostUsd ?? 0;
-        const sGross = inf.grossCostUsd ?? sNet;
-        const sNegSav = inf.negotiatedSavingsUsd || 0;
-        const sCudSav = inf.cudSavingsUsd || 0;
-        const sSav = (inf.savingsUsd !== undefined) ? inf.savingsUsd : (sNegSav + sCudSav);
-        const savBreakLabel = sCudSav > 0
-          ? `Neg. -${fmtEur(sNegSav)} · CUD -${fmtEur(sCudSav)}`
-          : (sSav > 0 ? 'Contract discount' : '—');
-        return `
-          <tr class="border-b border-slate-100 text-xs ${isExcl ? 'bg-slate-50/80 text-slate-400' : ''}">
-            <td class="py-2 px-3 font-semibold ${isExcl ? 'text-slate-500' : 'text-slate-800'}">
-              ${inf.icon ? escapeHtml(inf.icon) : `<svg class="jt-ico" aria-hidden="true"><use href="#ico-doc"/></svg>`} ${escapeHtml(sName)} ${sIdBadge} <span class="text-[10px] text-slate-500 font-normal">(${escapeHtml(sDet)})</span>
-              ${isExcl ? `<span class="jt-chip jt-chip--green ml-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] font-extrabold mono" title="${escapeHtml(inf.exclusionReason || 'Project with 0 AI calls')}">EXCLUDED FROM AI TCO (Non-AI SQL excluded: $${sNet.toFixed(2)})</span>` : ''}
-            </td>
-            <td class="${escapeHtml(tdGrossClass)}">${fmtEur(sGross)} <span class="text-[10px] text-slate-400">(${fmtUsd(sGross)})</span></td>
-            <td class="py-2 px-3 text-right mono text-emerald-700 font-semibold">${escapeHtml(sSav > 0 ? `-${fmtEur(sSav)}` : '0,00 €')} <span class="text-[10px] text-slate-400">(${escapeHtml(savBreakLabel)})</span></td>
-            <td class="py-2 px-3 text-right mono font-bold ${isExcl ? 'text-slate-400 line-through' : 'text-slate-900'}">${escapeHtml(isExcl ? `$0.00 AI (SQL: ${fmtUsd(sNet)})` : `${fmtEur(sNet)} (${fmtUsd(sNet)})`)}</td>
-          </tr>
-        `;
-      }).join('');
 
       setSafeHtml(body, `
         <div class="jt-kpi-grid grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div class="jt-kpi p-3.5 rounded-xl bg-white border border-slate-200">
-            <div class="jt-kpi__label text-slate-400 text-[11px]">Net AI Cost (Vertex + Gemini)</div>
+            <div class="jt-kpi__label text-slate-400 text-[11px]">Net AI Cost (all AI services)</div>
             <div class="jt-kpi__value text-xl font-extrabold text-slate-900 mono mt-0.5">${monArea.granted ? escapeHtml(`${fmtEur(p.estimatedCostUsd)} (${fmtUsd(p.estimatedCostUsd)})`) : `<svg class="jt-ico" aria-hidden="true"><use href="#ico-lock"/></svg> 403`}</div>
-            ${(p.infraCostUsd || 0) > 0 ? `<div class="jt-kpi__note text-[10px] text-[#0F2A4A] font-bold mt-0.5"><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> Total Invoice (11 srv): ${fmtEur(billNet)} (${fmtUsd(billNet)})</div>` : ''}
-            ${exclNonAiUsd > 0 ? `<div class="jt-kpi__note text-[10px] text-emerald-800 font-bold mono mt-0.5" title="SQL service on a project with 0 AI calls, excluded from AI TCO">AI Infra: $0.00 (Non-AI SQL excluded: $${exclNonAiUsd.toFixed(2)})</div>` : ''}
           </div>
           <div class="jt-kpi p-3.5 rounded-xl bg-white border border-slate-200">
             <div class="jt-kpi__label text-slate-400 text-[11px]">AI Calls (LLM)</div>
@@ -14675,16 +14525,16 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
 
         <div class="jt-table-panel bg-emerald-50/50 rounded-xl border border-emerald-200 p-4 space-y-2">
           <div class="${escapeHtml(CLS_FLEX_WRAP_BETWEEN)}">
-            <h4 class="jt-drawer__section-title text-xs font-bold uppercase tracking-wider text-emerald-900"><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> Cloud Billing Invoice Reconciliation (List Price · Neg./CUD/Cache Discounts · Net)</h4>
-            <span class="text-[11px] text-emerald-800 font-semibold">Project Invoice Total: <b>${fmtEur(billNet)}</b> (includes savings of <b>-${fmtEur(billSav)}</b> on <b>${fmtEur(billGross)}</b> list price)</span>
+            <h4 class="jt-drawer__section-title text-xs font-bold uppercase tracking-wider text-emerald-900"><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> AI Cost Breakdown (List Price · Credits / Cache Savings · Net)</h4>
+            <span class="text-[11px] text-emerald-800 font-semibold">Project AI Total: <b>${fmtEur(billNet)}</b> (includes savings of <b>-${fmtEur(billSav)}</b> on <b>${fmtEur(billGross)}</b> list price)</span>
           </div>
           <div class="overflow-x-auto">
           <table class="jt-table w-full min-w-[640px] text-left border-collapse bg-white rounded-lg overflow-hidden border border-emerald-100">
             <thead>
               <tr class="border-b border-slate-200 text-[10px] uppercase text-slate-500 bg-slate-50">
-                <th class="py-2 px-3">Cloud Billing Service &amp; Service ID</th>
+                <th class="py-2 px-3">AI Service &amp; Service ID</th>
                 <th class="py-2 px-3 text-right">List Price Cost (€ / $)</th>
-                <th class="py-2 px-3 text-right">Savings (Neg. / CUD / Cache)</th>
+                <th class="py-2 px-3 text-right">Savings (Credits / Cache)</th>
                 <th class="py-2 px-3 text-right">Net Subtotal (€ / $)</th>
               </tr>
             </thead>
@@ -14701,9 +14551,14 @@ body.jt-root aside select.focus\:outline-none:focus-visible {
                 <td class="py-2 px-3 text-right mono text-emerald-700 font-semibold">-${fmtEur(gSav)} <span class="text-[10px] text-slate-400">(Context Caching)</span></td>
                 <td class="py-2 px-3 text-right mono font-extrabold text-emerald-700">${fmtEur(gNet)} (${fmtUsd(gNet)})</td>
               </tr>
-              ${infraRowsHtml}
+              <tr class="border-b border-slate-100 text-xs">
+                <td class="py-2 px-3 font-bold text-slate-800"><svg class="jt-ico" aria-hidden="true"><use href="#ico-puzzle"/></svg> Other AI services <span class="text-[10px] text-slate-500 font-normal">(Gemini Enterprise / Agentspace, NotebookLM, Dialogflow CX, Code Assist, Model Armor · per-call estimate)</span></td>
+                <td class="${escapeHtml(tdGrossClass)}">${fmtEur(oGross)} <span class="text-[10px] text-slate-400">(${fmtUsd(oGross)})</span></td>
+                <td class="py-2 px-3 text-right mono text-emerald-700 font-semibold">-${fmtEur(oSav)} <span class="text-[10px] text-slate-400">(Managed savings)</span></td>
+                <td class="py-2 px-3 text-right mono font-extrabold text-emerald-700">${fmtEur(oNet)} (${fmtUsd(oNet)})</td>
+              </tr>
               <tr class="bg-slate-50 font-extrabold text-xs">
-                <td class="py-2.5 px-3 text-slate-900">PROJECT INVOICE TOTAL (${escapeHtml(2 + infList.length)} SERVICES)</td>
+                <td class="py-2.5 px-3 text-slate-900">PROJECT AI TOTAL</td>
                 <td class="py-2.5 px-3 text-right mono text-slate-800">${fmtEur(billGross)} (${fmtUsd(billGross)})</td>
                 <td class="py-2.5 px-3 text-right mono text-emerald-700">-${fmtEur(billSav)}</td>
                 <td class="py-2.5 px-3 text-right mono text-[#0F2A4A] text-sm">${fmtEur(billNet)} (${fmtUsd(billNet)})</td>

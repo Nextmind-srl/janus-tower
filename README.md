@@ -81,10 +81,9 @@ Open **http://localhost:8095** and click **Explore the demo** on the login scree
 
 | Area | In short |
 | :--- | :--- |
-| **AI FinOps (estimated)** | Calls, tokens and estimated cost per project, model, day, credential and user, from Cloud Monitoring metrics and a rate catalog. |
+| **AI FinOps (estimated)** | Calls, tokens and estimated cost per project, model, day, credential and user, from Cloud Monitoring metrics and a rate catalog. Only AI costs are counted: Vertex AI, Gemini API and managed AI services (Gemini Enterprise / Agentspace, NotebookLM, Dialogflow CX, Code Assist, Model Armor). |
 | **Pricing & Rates** | Model list and per-model rates read from Google APIs, daily read-only sync, manual overrides and billing adjustments. [Details](docs/pricing-and-rates.md) |
 | **Cost calibration** | A helper proposes discount, cache-hit and FX values from a Cloud Billing CSV export. [Details](docs/cost-calibration.md) |
-| **Infrastructure costs** | Cloud SQL, Redis, Compute and smaller services estimated from your own resources and the public price catalog. [Details](docs/infrastructure-costs.md) |
 | **Key & identity attribution** | Links usage to API keys, service accounts, OAuth workloads and users (Cloud Audit Logs). [What cannot be attributed](docs/attribution-and-limits.md) |
 | **Shadow AI** | Flags AI usage through personal credentials (ADC / OAuth), Workbench, Colab Enterprise, AI Studio keys, IDE Code Assist and NotebookLM. |
 | **Agents & Gemini Enterprise** | Discovers Gemini Enterprise / Agentspace apps, data stores, connectors, Reasoning Engines, Dialogflow CX agents and Agent Registry entries; on-demand read-only probe of one app. |
@@ -284,7 +283,7 @@ Bandit reports one known false positive (`B105` in `backend/auth_gcp.py`: an err
 ## Known limitations
 
 - **Costs are estimates**, derived from Cloud Monitoring token metrics and a rate catalog. They are not your invoice; no reconciliation with the Cloud Billing export is implemented yet.
-- **Infrastructure costs are list-price estimates** (no negotiated discounts, backups, egress or licences); Cloud Monitoring, Logging and Trace are not estimated. See [docs/infrastructure-costs.md](docs/infrastructure-costs.md).
+- **Only AI costs are estimated**: infrastructure that hosts AI workloads (Cloud SQL, Redis, Compute, Cloud Run, storage…) is not included. Managed AI services are priced per call with fixed unit prices, and Gemini Enterprise seat licences are not counted.
 - **Some usage cannot be attributed to a person**: for example calls made through a shared OAuth client appear as `oauth-workload:<id>` until Data Access Audit Logs are enabled for `aiplatform.googleapis.com`. See [docs/attribution-and-limits.md](docs/attribution-and-limits.md).
 - **Default rates are not verified**: the built-in table `MODEL_PRICING_PER_1M` is a fallback; run the Pricing & Rates sync and calibrate against your billing data.
 - **Not implemented yet**: a live MCP JSON-RPC inspector, PKCE, reuse of `gcloud` CLI credentials.

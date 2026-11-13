@@ -53,7 +53,7 @@ class TestIsolation(DemoServerCase):
         self.assertEqual(self.ns["DATA_DIR"], self.ns["DEMO_DATA_DIR"])
         self.assertIn(Path(tempfile.gettempdir()).resolve(), data_dir.parents)
         self.assertNotIn(ROOT.resolve(), data_dir.parents)
-        for name in ("TOKENS_FILE", "CACHE_FILE", "BUDGETS_FILE", "MODELS_PRICING_FILE", "SYNC_REGISTRY_FILE", "INFRA_CATALOG_CACHE_FILE"):
+        for name in ("TOKENS_FILE", "CACHE_FILE", "BUDGETS_FILE", "MODELS_PRICING_FILE", "SYNC_REGISTRY_FILE"):
             self.assertTrue(str(Path(self.ns[name]).resolve()).startswith(str(data_dir)), name)
         self.assertEqual(self.ns["get_account_cache_path"]("demo.admin@example.com", 30), str(data_dir / "scan_cache_v9_demo_admin_example_com_30d.json"))
 
@@ -70,7 +70,7 @@ class TestIsolation(DemoServerCase):
             self.client.get(path)
         for path in ("/api/budgets", "/api/projects-sync/toggle", "/api/models-pricing/config", "/api/data/purge", "/api/auth/logout",
                      "/api/projects-sync/force-scan", "/api/project-scan", "/api/models-pricing/sync", "/api/killswitch/toggle"):
-            self.client.post(path, {"projectId": "acme-ml-lab", "budgetUsd": 7, "action": "apply_auto_rule", "billingSettings": {"infraSavingsPct": 5}})
+            self.client.post(path, {"projectId": "acme-ml-lab", "budgetUsd": 7, "action": "apply_auto_rule", "billingSettings": {"managedServiceSavingsPct": 5}})
         self.assertEqual(sup.snapshot_dir(sup.REPO_DATA_DIR), self.repo_before)
 
     def test_the_demo_login_has_no_real_credential(self):
@@ -110,8 +110,8 @@ class TestNoNetwork(DemoServerCase):
         stale = dict(acc, login_date="2001-01-01")
         self.assertFalse(self.ns["refresh_access_token_for_account"](stale)[0], "the daily session policy still applies")
 
-    def test_infra_catalog_is_not_downloaded(self):
-        self.assertIsNone(self.ns["get_infra_catalog"]("token"))
+    def test_infrastructure_cost_code_is_gone(self):
+        self.assertNotIn("get_infra_catalog", self.ns)
 
     def test_oauth_routes_redirect_home(self):
         for path in ("/auth/google/start", "/auth/google/start?login_hint=a@example.com", "/oauth2callback?code=abc&state=x",
@@ -203,12 +203,12 @@ class TestDemoViewsWork(DemoServerCase):
         self.assertTrue(data["fromCache"])
         self.assertGreaterEqual(len(data["projects"]), 12)
         self.assertEqual({p["projectId"] for p in data["projects"] if p["projectId"].startswith("acme-")}, {p["projectId"] for p in data["projects"]})
-        self.assertGreater(data["summary"]["totalBillCostUsd"], 100)
+        self.assertGreater(data["summary"]["estimatedCostUsd"], 100)
         self.assertEqual(data["auth"]["activeAccount"], "demo.admin@example.com")
         self.assertIn("syncMeta", data["projects"][0])
         self.assertEqual(data["sync"]["account"], "demo.admin@example.com")
         self.assertEqual(data["sync"]["totalSynchronized"], len(data["projects"]))
-        self.assertIn("totalTcoUsd", data["summary"], "the app's own enrichment ran on the demo payload")
+        self.assertIn("savedByCachingUsd", data["summary"], "the app's own enrichment ran on the demo payload")
 
     def test_other_windows_are_sliced_from_the_cache(self):
         self.login()

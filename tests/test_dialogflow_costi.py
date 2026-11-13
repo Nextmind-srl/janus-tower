@@ -23,14 +23,14 @@ class TestDialogflowManagedSettings(unittest.TestCase):
     def setUp(self) -> None:
         self.ns = load_app_namespace()
 
-    def _run(self, savings_pct: float, hit_pct: float) -> dict:
+    def _run(self, savings_pct: float) -> dict:
         ns = self.ns
         with tempfile.TemporaryDirectory() as tmp:
             ns["MODELS_PRICING_FILE"] = str(Path(tmp) / "models_pricing_config.json")
             ns["_MODELS_PRICING_MEM_CACHE"] = {"mtime": 0.0, "data": None}
             cfg = ns["load_models_pricing_config"]()
             cfg.setdefault("billingSettings", {}).update(
-                {"managedServiceSavingsPct": savings_pct, "managedServiceCacheHitRatioPct": hit_pct}
+                {"managedServiceSavingsPct": savings_pct}
             )
             ns["save_models_pricing_config"](cfg)
             ns["_MODELS_PRICING_MEM_CACHE"] = {"mtime": 0.0, "data": None}
@@ -54,7 +54,7 @@ class TestDialogflowManagedSettings(unittest.TestCase):
             return {"result": result, "cred": cred, "model": model, "day": day}
 
     def test_default_savings_zero_keeps_current_cost(self) -> None:
-        out = self._run(0.0, 0.0)
+        out = self._run(0.0)
         r = out["result"]
         gross = r["otherAiGrossCostUsd"]
         self.assertGreater(gross, 0.0)
@@ -67,8 +67,8 @@ class TestDialogflowManagedSettings(unittest.TestCase):
         self.assertAlmostEqual(out["model"]["costUsd"], gross, places=9)
 
     def test_full_savings_zeroes_cost_but_keeps_usage(self) -> None:
-        base = self._run(0.0, 0.0)["result"]["otherAiGrossCostUsd"]
-        out = self._run(100.0, 0.0)
+        base = self._run(0.0)["result"]["otherAiGrossCostUsd"]
+        out = self._run(100.0)
         r = out["result"]
         self.assertAlmostEqual(r["otherAiGrossCostUsd"], base, places=9)
         self.assertAlmostEqual(r["otherAiCacheSavingsUsd"], base, places=9)
@@ -80,14 +80,15 @@ class TestDialogflowManagedSettings(unittest.TestCase):
         self.assertAlmostEqual(out["model"]["costUsd"], 0.0, places=9)
         self.assertEqual(r["totalTokens"], self.TOKENS)
 
-    def test_half_savings_halves_cost_and_cache_ratio_applies(self) -> None:
-        base = self._run(0.0, 0.0)["result"]["otherAiGrossCostUsd"]
-        out = self._run(50.0, 40.0)
+    def test_half_savings_halves_cost_and_no_cache_share(self) -> None:
+        base = self._run(0.0)["result"]["otherAiGrossCostUsd"]
+        out = self._run(50.0)
         r = out["result"]
         self.assertAlmostEqual(r["otherAiCostUsd"], base / 2.0, places=9)
         self.assertAlmostEqual(r["otherAiCacheSavingsUsd"], base / 2.0, places=9)
         self.assertAlmostEqual(out["cred"]["estimatedCostUsd"], base / 2.0, places=9)
-        self.assertEqual(r["cachedTokens"], int(round(self.TOKENS * 0.82 * 0.40)))
+        # billed per call: no cached-token share is estimated
+        self.assertEqual(r["cachedTokens"], 0)
 
 
 if __name__ == "__main__":

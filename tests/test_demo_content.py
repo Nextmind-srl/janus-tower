@@ -203,44 +203,13 @@ class TestShapesMatchTheRealBackend(DemoFilesCase):
         no_billing_demo = self.demo._permissions(True, False, False, 0, 0, 0, False)
         self.assertEqual(no_billing_demo["areas"]["billingInfo"], no_billing_real["areas"]["billingInfo"])
 
-    def test_infra_lines_match__infra_line(self):
-        real_line = self.ns["_infra_line"]
-        cases = [
-            ("sql", 96.4, ["finance-ledger-db", "finance-ledger-replica"], ["europe-west8"], "ok", ""),
-            ("compute", 142.3, ["a", "b", "c", "d", "e"], ["europe-west4"], "partial", "ml-eval-gpu-vm: GPU price not found in catalog (europe-west4)"),
-            ("sql", 0.0, ["support-tickets-db"], ["europe-west1"], "not_estimable", "support-tickets-db: unsupported tier db-f1-micro"),
-            ("redis", 31.2, ["embeddings-cache"], ["europe-west8"], "ok", ""),
-        ]
-        for key, monthly, instances, locations, status, note in cases:
-            demo = self.demo._infra_line_demo(key, monthly, instances, locations, status, note, days=30)
-            service, sid, name, subtitle, icon = self.demo.INFRA_SERVICES[key]
-            real = real_line(service, sid, name, subtitle, icon, instances=instances, locations=locations, gross=monthly, days=30, status=status, note=note)
-            self.assertEqual(demo, real, key)
-        self.assertEqual(self.demo.INFRA_SERVICES["sql"][1], self.ns["INFRA_CATALOG_SERVICE_IDS"]["sql"])
-
-    def test_every_project_infra_line_has_the_real_fields(self):
-        keys = None
+    def test_no_infrastructure_costs_in_the_demo(self):
+        # only AI costs are reported: no infrastructure lines or totals anywhere
         for p in self.cache30["projects"]:
-            for line in p.get("infraServices", []):
-                keys = keys or set(line)
-                self.assertEqual(set(line), keys)
-                self.assertIn(line["estimateStatus"], ("ok", "partial", "not_estimable"))
-                self.assertIs(line["estimated"], True)
-                self.assertIn("excludedNonAi", line)
-                self.assertTrue(line["instances"], p["projectId"])
-                self.assertTrue(line["details"])
-        self.assertIsNotNone(keys)
-        statuses = {line["estimateStatus"] for p in self.cache30["projects"] for line in p.get("infraServices", [])}
-        self.assertEqual(statuses, {"ok", "partial", "not_estimable"})
-        self.assertGreater(self.cache30["summary"]["infraCostUsd"], 0)
-
-    def test_infra_costs_add_up(self):
-        for p in self.cache30["projects"]:
-            lines = p.get("infraServices", [])
-            if not lines:
-                continue
-            total = round(sum(line["costUsd"] for line in lines), 2)
-            self.assertAlmostEqual(total, p["infraCostUsd"] + p.get("excludedNonAiInfraCostUsd", 0.0), delta=0.02, msg=p["projectId"])
+            for key in ("infraServices", "infraCostUsd", "totalBillCostUsd", "totalTcoUsd", "excludedNonAiInfraCostUsd"):
+                self.assertNotIn(key, p, p["projectId"])
+        for key in ("infraCostUsd", "totalBillCostUsd", "totalTcoUsd"):
+            self.assertNotIn(key, self.cache30["summary"])
 
     def test_pricing_config_matches_the_backend_default_shape(self):
         real_default = self.ns["_build_default_models_pricing_config"]()

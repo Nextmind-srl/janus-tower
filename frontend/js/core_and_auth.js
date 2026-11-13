@@ -2300,13 +2300,6 @@
       const pAiSav = (p.vertexCacheSavingsUsd || 0) + (p.geminiCacheSavingsUsd || 0) + (p.otherAiCacheSavingsUsd || 0);
       acc.totalGrossCost += pAiGross;
       acc.totalCacheSavings += pAiSav;
-      acc.infraGrossCost += (p.infraGrossCostUsd || 0);
-      acc.infraSavings += (p.infraSavingsUsd || 0);
-      acc.infraCost += (p.infraCostUsd || 0);
-      acc.excludedNonAiInfraCost += (p.excludedNonAiInfraCostUsd || (p.finopsExtended && p.finopsExtended.excludedNonAiInfraCostUsd) || 0);
-      acc.totalBillGross += (p.totalBillGrossUsd || (pAiGross + (p.infraGrossCostUsd || 0)));
-      acc.totalBillSavings += (p.totalBillSavingsUsd || (pAiSav + (p.infraSavingsUsd || 0)));
-      acc.totalBillCost += (p.totalBillCostUsd || ((p.estimatedCostUsd || 0) + (p.infraCostUsd || 0)));
       acc.infRequests += (p.inferenceRequests || 0);
       acc.sysRequests += (p.systemRequests || 0);
       acc.totalRequests += (p.totalRequests || 0);
@@ -2350,8 +2343,6 @@
         credBreakdown: [],
         totalCost: 0, vertexCost: 0, geminiCost: 0, otherAiCost: 0,
         totalGrossCost: 0, totalCacheSavings: 0,
-        infraGrossCost: 0, infraSavings: 0, infraCost: 0, excludedNonAiInfraCost: 0,
-        totalBillGross: 0, totalBillSavings: 0, totalBillCost: 0,
         infRequests: 0, sysRequests: 0, totalRequests: 0, errors429: 0,
         vertexRequests: 0, geminiApiRequests: 0,
         inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cachedTokens: 0, totalTokens: 0,
@@ -2401,8 +2392,6 @@
         selProj, selType, selCred, selModel, excludeSys,
         totalCost: acc.totalCost, vertexCost: acc.vertexCost, geminiCost: acc.geminiCost, otherAiCost: acc.otherAiCost,
         totalGrossCost: acc.totalGrossCost, totalCacheSavings: acc.totalCacheSavings,
-        infraGrossCost: acc.infraGrossCost, infraSavings: acc.infraSavings, infraCost: acc.infraCost, excludedNonAiInfraCost: acc.excludedNonAiInfraCost,
-        totalBillGross: acc.totalBillGross, totalBillSavings: acc.totalBillSavings, totalBillCost: acc.totalBillCost,
         infRequests: acc.infRequests, sysRequests: acc.sysRequests, totalRequests: acc.totalRequests,
         vertexRequests: acc.vertexRequests, geminiApiRequests: acc.geminiApiRequests,
         displayedRequests: excludeSys ? acc.infRequests : acc.totalRequests,
@@ -2449,22 +2438,15 @@
 
       const recLine = document.getElementById('kpi-bill-reconciliation-line');
       if (recLine) {
-        const exclVal = agg.excludedNonAiInfraCost || s.excludedNonAiInfraCostUsd || (s.finopsExtended && s.finopsExtended.excludedNonAiInfraCostUsd) || 0;
-        const exclBadge = exclVal > 0 ? ` · ${toneBadge('green', `Excluded Non-AI SQL: -${fmtUsd(exclVal)}`, { chip: true, mono: true, title: 'Cloud SQL on projects with 0 AI calls excluded from AI TCO' })}` : '';
-        if ((agg.infraCost || 0) > 0) {
-          setSafeHtml(recLine, `<span class="text-[#0F2A4A] font-extrabold">Total Invoice (11 srv): ${fmtEur(agg.totalBillCost)}</span> (${fmtUsd(agg.totalBillCost)}) · List: <b>${fmtEur(agg.totalBillGross)}</b> · Discounts: <b class="text-emerald-700">-${fmtEur(agg.totalBillSavings)}</b>${exclBadge}`);
-        } else {
-          setSafeHtml(recLine, `Gross AI: <b>${fmtEur(agg.totalGrossCost)}</b> · Cache Savings: <b class="text-emerald-700">-${fmtEur(agg.totalCacheSavings)}</b>${exclBadge}`);
-        }
+        setSafeHtml(recLine, `Gross AI: <b>${fmtEur(agg.totalGrossCost)}</b> · Cache Savings: <b class="text-emerald-700">-${fmtEur(agg.totalCacheSavings)}</b>`);
       }
 
       const activeDaysCount = agg.timeline.filter(d => d.costUsd > 0 || d.inferenceRequests > 0).length;
       const avgDaily = activeDaysCount > 0 ? (agg.totalCost / activeDaysCount) : 0;
       document.getElementById('kpi-daily-avg-cost').textContent = `Avg: ${fmtUsd(avgDaily)}/day`;
-      const vCombinedUsd = (agg.vertexCost || 0) + (agg.otherAiCost || 0);
-      document.getElementById('kpi-vertex-cost').textContent = `${fmtEur(vCombinedUsd)} (${fmtUsd(vCombinedUsd)})`;
+      document.getElementById('kpi-vertex-cost').textContent = `${fmtEur(agg.vertexCost || 0)} (${fmtUsd(agg.vertexCost || 0)})`;
       document.getElementById('kpi-gemini-cost').textContent = `${fmtEur(agg.geminiCost)} (${fmtUsd(agg.geminiCost)})`;
-      document.getElementById('kpi-other-ai-cost').textContent = `${fmtEur(agg.infraCost || 0)} (${fmtUsd(agg.infraCost || 0)})`;
+      document.getElementById('kpi-other-ai-cost').textContent = `${fmtEur(agg.otherAiCost || 0)} (${fmtUsd(agg.otherAiCost || 0)})`;
 
       document.getElementById('kpi-req-title').textContent = agg.excludeSys ? 'AI Calls (LLM)' : 'Total Calls';
       document.getElementById('kpi-total-requests').textContent = fmtNum(agg.displayedRequests);

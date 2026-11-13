@@ -27,13 +27,14 @@ Per-model rates are read from the Cloud Billing Catalog (`cloudbilling.googleapi
 
 ## Billing settings and overrides
 
-Open **Pricing & Rates > Billing settings** (or edit `billingSettings` and `models` in `data/models_pricing_config.json`). Defaults are neutral so a fresh install does not understate list cost (`DEFAULT_BILLING_SETTINGS` in `backend/config.py`):
+Open **Pricing & Rates > Billing settings** (or edit `billingSettings` and `models` in `data/models_pricing_config.json`). Discounts default to zero; the Vertex AI implicit cache hit starts at a typical 93% (`DEFAULT_BILLING_SETTINGS` in `backend/config.py`). Calibrate both on your Cloud Billing export ([cost calibration](cost-calibration.md)):
 
 | Setting | Default |
 | :--- | :--- |
 | `vertexBillingCreditDiscountPct`, `geminiApiBillingCreditDiscountPct` | `0` |
-| `vertexImplicitCacheHitRatioPct`, `geminiApiImplicitCacheHitRatioPct` | `0` |
-| `managedServiceSavingsPct`, `managedServiceCacheHitRatioPct` | `0` |
+| `vertexImplicitCacheHitRatioPct` | `93` (share of Vertex AI input tokens billed at the cached-input rate) |
+| `geminiApiImplicitCacheHitRatioPct` | `0` |
+| `managedServiceSavingsPct` | `0` (managed AI services are billed per call: there is no cache-hit setting for them) |
 | `regionalMultiplierDefault` | `1.10` (applied to non-global regional endpoints unless the model has explicit `regional_*` rates) |
 | `usdToEurRate` / `usdToEurRateAuto` | `0.92` / `true` |
 

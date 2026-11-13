@@ -24,8 +24,6 @@ def project_has_ai_data(p: dict) -> bool:
         return True
     if (p.get("estimatedCostUsd", 0.0) or 0.0) > 0:
         return True
-    if (p.get("totalBillCostUsd", 0.0) or 0.0) > 0:
-        return True
     if (p.get("totalRequests", 0) or 0) > 0 or (p.get("inferenceRequests", 0) or 0) > 0:
         return True
     if (p.get("totalTokens", 0) or 0) > 0:
@@ -246,7 +244,6 @@ def update_registry_entry_from_project(acc_projects: dict, p: dict, scanned_at: 
         "aiActive": bool(p.get("aiActive", False) or (is_err and existing.get("aiActive", False))),
         "scanStatus": (existing.get("scanStatus") if (is_err and existing and existing.get("scanStatus") not in (None, "", "ERROR")) else p.get("scanStatus", "OK")),
         "estimatedCostUsd": round(p.get("estimatedCostUsd", 0.0) or 0.0, 4),
-        "totalBillCostUsd": round(p.get("totalBillCostUsd", p.get("estimatedCostUsd", 0.0)) or 0.0, 4),
         "inferenceRequests": int(p.get("inferenceRequests", 0) or 0),
         "totalRequests": int(p.get("totalRequests", 0) or 0),
         "totalTokens": int(p.get("totalTokens", 0) or 0),
@@ -454,12 +451,6 @@ def build_scan_payload_from_projects(
     total_other_ai_cache_savings = round(sum(p.get("otherAiCacheSavingsUsd", 0.0) for p in inspected), 4)
     total_other_ai_cost = round(sum(p.get("otherAiCostUsd", 0.0) for p in inspected), 4)
     total_cost_usd = round(sum(p.get("estimatedCostUsd", 0.0) for p in inspected), 4)
-    total_infra_gross_cost = round(sum(p.get("infraGrossCostUsd", 0.0) for p in inspected), 4)
-    total_infra_savings = round(sum(p.get("infraSavingsUsd", 0.0) for p in inspected), 4)
-    total_infra_cost = round(sum(p.get("infraCostUsd", 0.0) for p in inspected), 4)
-    total_bill_gross_usd = round(sum(p.get("totalBillGrossUsd", p.get("estimatedCostUsd", 0.0)) for p in inspected), 4)
-    total_bill_savings_usd = round(sum(p.get("totalBillSavingsUsd", 0.0) for p in inspected), 4)
-    total_bill_cost_usd = round(sum(p.get("totalBillCostUsd", p.get("estimatedCostUsd", 0.0)) for p in inspected), 4)
 
     billed_projects_count = sum(1 for p in inspected if p.get("billingEnabled"))
     skipped_no_billing_count = sum(1 for p in inspected if p.get("skippedNoBilling"))
@@ -568,12 +559,6 @@ def build_scan_payload_from_projects(
             "otherAiCacheSavingsUsd": total_other_ai_cache_savings,
             "otherAiCostUsd": total_other_ai_cost,
             "estimatedCostUsd": total_cost_usd,
-            "infraGrossCostUsd": total_infra_gross_cost,
-            "infraSavingsUsd": total_infra_savings,
-            "infraCostUsd": total_infra_cost,
-            "totalBillGrossUsd": total_bill_gross_usd,
-            "totalBillSavingsUsd": total_bill_savings_usd,
-            "totalBillCostUsd": total_bill_cost_usd,
             "totalApiKeys": total_api_keys,
             "totalServiceAccounts": total_service_accounts,
             "totalActiveUsers": len(unique_users_set),
@@ -603,7 +588,7 @@ def slice_cached_payload_for_days(
     Derives a scan payload for `target_days` or an exact `[start_date, end_date]` range (`today`, `yesterday`,
     `single`, `custom`, or numeric `days`) from an existing cached payload (e.g. 30d or 90d)
     without making ANY live GCP requests, so switching period filters stays 100% instant and cached!
-    Slices project dailySeries, models[].dailySeries, credentialsUsage[].dailySeries, apiKeys, usersUsage, and infraServices.
+    Slices project dailySeries, models[].dailySeries, credentialsUsage[].dailySeries, apiKeys and usersUsage.
     """
     import copy
 
@@ -962,39 +947,6 @@ def slice_cached_payload_for_days(
 
         if p.get("usersUsage"):
             p["usersUsage"].sort(key=lambda x: (x.get("estimatedCostUsd", 0.0), x.get("attributedTokens", 0), x.get("totalInteractions", 0)), reverse=True)
-
-        # Scale infraServices proportionally to window ratio, excluding non-AI services (e.g. Cloud SQL) from infraCostUsd
-        infra_ratio = min(1.0, float(target_days) / float(base_days))
-        if p.get("infraServices"):
-            if infra_ratio < 0.999:
-                import re as _re_infra
-                for inf_s in p["infraServices"]:
-                    # Gross defaults to the ORIGINAL net cost when missing
-                    if "grossCostUsd" not in inf_s:
-                        inf_s["grossCostUsd"] = inf_s.get("costUsd", 0.0)
-                    # Scale every monetary field of the row with the same window ratio
-                    for money_k in ("costUsd", "grossCostUsd", "savingsUsd", "negotiatedSavingsUsd",
-                                    "cudSavingsUsd", "unroundedEur", "netCostUsd"):
-                        if inf_s.get(money_k) is not None:
-                            inf_s[money_k] = round(float(inf_s.get(money_k) or 0.0) * infra_ratio, 4)
-                    if inf_s.get("activeDays") is not None:
-                        inf_s["activeDays"] = min(int(target_days), int(inf_s.get("activeDays") or 0))
-                    if isinstance(inf_s.get("details"), str):
-                        # Replace only the first "<N> days" occurrence with the window length ("gg" = rows saved before the English UI)
-                        inf_s["details"] = _re_infra.sub(
-                            r"\b\d+ (days|gg)\b", lambda m: f"{int(target_days)} {m.group(1)}", inf_s["details"], count=1)
-            ai_infra = [x for x in p["infraServices"] if not x.get("excludedNonAi", False)]
-            p["infraCostUsd"] = round(sum(float(x.get("costUsd", 0.0) or 0.0) for x in ai_infra), 4)
-            p["infraGrossCostUsd"] = round(sum(float(x.get("grossCostUsd", x.get("costUsd", 0.0)) or 0.0) for x in ai_infra), 4)
-            p["infraSavingsUsd"] = round(max(0.0, p["infraGrossCostUsd"] - p["infraCostUsd"]), 4)
-            if p.get("nonAiInfraCostUsd") is not None and infra_ratio < 0.999:
-                p["nonAiInfraCostUsd"] = round(float(p.get("nonAiInfraCostUsd", 0.0) or 0.0) * infra_ratio, 4)
-
-        ai_gross_t = round(p.get("vertexGrossCostUsd", 0.0) + p.get("geminiGrossCostUsd", 0.0) + p.get("otherAiGrossCostUsd", 0.0), 4)
-        ai_sav_t = round(p.get("vertexCacheSavingsUsd", 0.0) + p.get("geminiCacheSavingsUsd", 0.0) + p.get("otherAiCacheSavingsUsd", 0.0), 4)
-        p["totalBillGrossUsd"] = round(ai_gross_t + (p.get("infraGrossCostUsd", 0.0) or 0.0), 4)
-        p["totalBillSavingsUsd"] = round(ai_sav_t + (p.get("infraSavingsUsd", 0.0) or 0.0), 4)
-        p["totalBillCostUsd"] = round(p.get("estimatedCostUsd", 0.0) + (p.get("infraCostUsd", 0.0) or 0.0), 4)
 
         # Clear pre-computed 30d telemetry dicts so enrich_scan_payload_security recomputes them for target_days
         for k_stale in ("dataResidency", "finopsExtended", "aiToolsSummary", "agentspaceTelemetry", "aiLogForensics", "aiSecurityPosture"):
@@ -1366,7 +1318,7 @@ def scan_all_projects(
 
     update_scan_progress(
         currentPhase="Phase 4/4",
-        currentStep="Aggregating FinOps TCO, Data Residency and saving cache..."
+        currentStep="Aggregating FinOps, Data Residency and saving cache..."
     )
 
     scanned_at_iso = datetime.now(timezone.utc).isoformat()

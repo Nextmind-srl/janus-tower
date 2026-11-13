@@ -116,37 +116,6 @@ API_CATALOG = {
     "iap.googleapis.com": ("Identity-Aware Proxy", "AI Security", "🚪", "Zero-trust access to applications and resources"),
 }
 
-# service key -> (service, serviceId, short name, subtitle, icon), same metadata as the backend infra builders
-INFRA_SERVICES = {
-    "sql": ("sqladmin.googleapis.com", "9662-B51E-5089", "Cloud SQL", "Managed database", "🗄️"),
-    "redis": ("redis.googleapis.com", "5AF5-2C11-D467", "Cloud Memorystore for Redis", "Session cache", "⚡"),
-    "compute": ("compute.googleapis.com", "6F81-5844-456A", "Compute Engine", "VMs, disks and static IPs", "🖥️"),
-    "artifactregistry": ("artifactregistry.googleapis.com", "149C-F9EC-3994", "Artifact Registry", "Repository storage", "📦"),
-    "secretmanager": ("secretmanager.googleapis.com", "EE82-7A5E-871C", "Secret Manager", "Active secret versions", "🔑"),
-    "bigquery": ("bigquery.googleapis.com", "24E6-581D-38E5", "BigQuery", "Analysis and storage (gross of free tiers)", "📊"),
-    "storage": ("storage.googleapis.com", "95FF-2EF5-5EA1", "Cloud Storage", "Buckets (storage only, excluding operations and traffic)", "🪣"),
-    "run": ("run.googleapis.com", "152E-C115-5142", "Cloud Run", "Request-billed services (gross of free tiers)", "🚀"),
-}
-INFRA_SAVINGS_PCT = 0.0  # the default of ``infraSavingsPct`` in the billing settings
-
-
-def _infra_line_demo(key: str, monthly: float, instances: list, locations: list, status: str = "ok", note: str = "", days: int = 30) -> dict:
-    """Mirror of ``_infra_line`` (backend/infra_costs.py): same fields, same ``details`` text, list-price estimate."""
-    service, service_id, name, subtitle, icon = INFRA_SERVICES[key]
-    gross = round(max(0.0, monthly * days / 30.0), 4)
-    sav = round(gross * INFRA_SAVINGS_PCT / 100.0, 4)
-    net = round(gross - sav, 4)
-    details = [", ".join(instances[:4]) + (f" +{len(instances) - 4}" if len(instances) > 4 else "") if instances else "",
-               ", ".join(locations), f"{days} days", {"ok": "list-price estimate", "partial": "partial estimate"}.get(status, ""), note[:400]]
-    return {
-        "service": service, "serviceId": service_id, "name": f"{name} ({subtitle})", "shortName": name, "icon": icon,
-        "instances": list(instances), "locations": sorted(x for x in set(locations) if x), "activeDays": days,
-        "grossCostUsd": gross, "negotiatedSavingsUsd": sav, "cudSavingsUsd": 0.0, "savingsUsd": sav, "costUsd": net,
-        "unroundedEur": round(net * FAKE_USD_TO_EUR, 6), "estimated": True, "estimateStatus": status, "note": note,
-        "estimateNote": note, "details": " · ".join(x for x in details if x),
-    }
-
-
 BUCKET_INT_KEYS = (
     "requests", "inferenceRequests", "vertexInferenceRequests", "systemRequests", "vertexRequests",
     "geminiApiRequests", "ok200", "ok200Inference", "errors429", "tokens", "inputTokens", "outputTokens",
@@ -384,8 +353,6 @@ def _project_specs(ref: date) -> list[dict]:
             _simple_res("DLP_INSPECT_TEMPLATE", "🛡️ Sensitive Data Protection (DLP Template)", "pii-redaction-template", "europe-west1", ref, 120, pid, "security/dlp", "PII redaction template"),
             _simple_res("AGENT_REGISTRY_AGENT", "🗂️ Agent Registry (Governed Agent)", "finance-agent-registry-entry", "europe-west8", ref, 30, pid, "agent-registry", "Registered agent"),
         ],
-        "infra": [("bigquery", 41.2, ["analysis 1.840 TiB", "storage 212.4 GiB"], ["EU"]), ("storage", 6.4, ["standard 318.0 GiB"], ["europe-west8"]),
-                  ("sql", 96.4, ["finance-ledger-db", "finance-ledger-replica"], ["europe-west8"])],
         "features": [("vertex_gemini_inference", "Vertex AI Online Inference (Gemini / Model Garden)", "Vertex AI LLM Inference", "✨", "fin-"),
                      ("vertex_agent_engine", "Vertex AI Agent Engine (Reasoning Engines / ADK)", "Gemini Agent Platform", "🤖", None)],
     })
@@ -418,9 +385,6 @@ def _project_specs(ref: date) -> list[dict]:
             _workbench("workbench-research-01", "europe-west4", ref, 75, pid, ml_users[3]),
         ] + [_colab_job("nightly-feature-refresh", ml_users[1], "europe-west4", ref, k, pid, "JOB_STATE_FAILED" if k in (9, 17) else "JOB_STATE_SUCCEEDED") for k in range(1, 22)]
         + [_colab_job("weekly-model-eval", ml_users[4], "europe-west4", ref, k * 7, pid, "JOB_STATE_SUCCEEDED") for k in range(1, 5)],
-        "infra": [("run", 18.9, ["vCPU-seconds 2,410,000", "GiB-seconds 4,820,000"], ["europe-west4"]),
-                  ("compute", 142.3, ["ml-training-vm", "ml-training-vm-boot", "ml-scratch-disk", "ml-lab-ip"], ["europe-west4"], "partial",
-                   "ml-eval-gpu-vm: GPU price not found in catalog (europe-west4)")],
         "features": [("vertex_colab_enterprise", "Colab Enterprise & Vertex AI Notebooks Runtime", "Vertex AI Notebooks", "📓", None, 310)],
     })
 
@@ -454,7 +418,6 @@ def _project_specs(ref: date) -> list[dict]:
                         "Content: CONTENT_REQUIRED", contentConfig="CONTENT_REQUIRED")
             for k, d in enumerate(ds_ids)
         ],
-        "infra": [],
         "features": [("svc_agentspace_assistant", "Gemini Enterprise Assistant", "Gemini Enterprise", "✨", "assist"),
                      ("svc_notebooklm_enterprise", "NotebookLM Enterprise", "Gemini Enterprise", "📓", "nb")],
     })
@@ -479,8 +442,6 @@ def _project_specs(ref: date) -> list[dict]:
             _reasoning_engine("support-bot-agent-20260922", "europe-west1", ref, 43, pid, "Risposte di primo livello"),
             _simple_res("DIALOGFLOW_CX_AGENT", "💬 Dialogflow CX Generative Agent", "support-triage-agent", "europe-west1", ref, 100, pid, "dialogflow/cx", "Playbook generativo"),
         ],
-        "infra": [("run", 12.7, ["vCPU-seconds 1,180,000", "GiB-seconds 2,360,000"], ["europe-west1"]),
-                  ("sql", 0.0, ["support-tickets-db"], ["europe-west1"], "not_estimable", "support-tickets-db: unsupported tier db-f1-micro")],
         "features": [("vertex_gemini_inference", "Vertex AI Online Inference (Gemini / Model Garden)", "Vertex AI LLM Inference", "✨", "sb-"),
                      ("vertex_agent_engine", "Vertex AI Agent Engine (Reasoning Engines / ADK)", "Gemini Agent Platform", "🤖", None)],
     })
@@ -504,10 +465,9 @@ def _project_specs(ref: date) -> list[dict]:
         "users": [{"email": _person(3), "type": "INTERNAL_USER"}, {"email": _contractor(1), "type": "EXTERNAL_USER"},
                   {"email": _person(14), "type": "INTERNAL_USER"}, {"email": _person(9), "type": "INTERNAL_USER"}],
         "resources": [],
-        "infra": [],
     })
 
-    # 6. Data platform: embeddings, vector search, idle endpoint, infra costs
+    # 6. Data platform: embeddings, vector search, idle endpoint
     pid = "acme-data-platform"
     specs.append({
         "pid": pid, "name": "Acme Data Platform", "number": "555000000106", "age": 600, "budget": 400.0, "latency": 640.0,
@@ -525,9 +485,6 @@ def _project_specs(ref: date) -> list[dict]:
             _simple_res("RAG_CORPUS", "📚 Vertex AI RAG Corpus", "contracts-corpus", "europe-west8", ref, 160, pid, "vertex-ai/rag", "RAG Corpus"),
             _endpoint("legacy-classifier", "europe-west8", ref, 380, pid, 0),
         ],
-        "infra": [("bigquery", 188.4, ["analysis 7.920 TiB", "storage 1,140.5 GiB"], ["EU"]), ("storage", 52.1, ["standard 2,410.0 GiB", "nearline 860.2 GiB"], ["europe-west8"]),
-                  ("sql", 74.8, ["platform-metadata-db"], ["europe-west8"]), ("redis", 31.2, ["embeddings-cache"], ["europe-west8"]),
-                  ("artifactregistry", 2.6, ["DOCKER 18.40 GiB"], ["europe-west8"]), ("secretmanager", 0.9, ["active versions 14"], ["global"])],
     })
 
     # 7. Marketing GenAI: global/US traffic (GDPR finding) and a cost spike
@@ -543,7 +500,6 @@ def _project_specs(ref: date) -> list[dict]:
         "apis": [SVC_VERTEX],
         "ma": "off",
         "resources": [_endpoint("brand-voice-endpoint", "us-central1", ref, 110, pid, 1, private=True)],
-        "infra": [("storage", 7.3, ["standard 124.0 GiB"], ["europe-west1"])],
     })
 
     # 8. Developer tools: Gemini Code Assist
@@ -559,7 +515,6 @@ def _project_specs(ref: date) -> list[dict]:
         "ma": "off",
         "users": [{"email": u, "type": "INTERNAL_USER"} for u in devtools_users],
         "resources": [],
-        "infra": [],
     })
 
     # 9. HR assistant: small, EU only, well protected
@@ -574,7 +529,6 @@ def _project_specs(ref: date) -> list[dict]:
         "resources": [_reasoning_engine("hr-assistant-engine", "europe-west8", ref, 60, pid, "Answers questions about HR policies"),
                       _simple_res("DLP_INSPECT_TEMPLATE", "🛡️ Sensitive Data Protection (DLP Template)", "hr-pii-template", "europe-west8", ref, 55, pid, "security/dlp", "PII redaction template"),
                       _simple_res("AGENT_REGISTRY_AGENT", "🗂️ Agent Registry (Governed Agent)", "hr-assistant-registry-entry", "europe-west8", ref, 50, pid, "agent-registry", "Registered agent")],
-        "infra": [],
     })
 
     # 10. Sales copilot: Agent Registry, MCP server, partner model
@@ -592,7 +546,6 @@ def _project_specs(ref: date) -> list[dict]:
         "resources": [_reasoning_engine("sales-copilot-engine", "europe-west1", ref, 70, pid, "Preparazione trattative"),
                       _simple_res("AGENT_REGISTRY_MCP", "🔌 Agent Registry MCP Server", "crm-mcp-server", "europe-west1", ref, 65, pid, "agent-registry", "Registered MCP server"),
                       _simple_res("AGENT_REGISTRY_AGENT", "🗂️ Agent Registry (Governed Agent)", "sales-copilot-registry-entry", "europe-west1", ref, 65, pid, "agent-registry", "Registered agent")],
-        "infra": [("run", 21.5, ["vCPU-seconds 1,960,000", "GiB-seconds 3,920,000"], ["europe-west8"]), ("redis", 28.6, ["copilot-session-cache"], ["europe-west8"])],
     })
 
     # 11. No billing: excluded from the scan
@@ -601,7 +554,7 @@ def _project_specs(ref: date) -> list[dict]:
     specs.append({"pid": "acme-hackathon-2026", "name": "Acme Hackathon 2026", "number": "555000000112", "age": 90, "no_billing": True, "aistudio": True,
                   "streams": [_llm("hk-flash", "gemini-2.5-flash", SVC_GEMINI, f"apikey:{_key(10, '', '', [], 0)['uid']}", "global", 240, 1400, 220, e429=0.06, free=True, wk=0.5)],
                   "keys": [_key(10, "Hackathon Free Key", _contractor(3), [], 30, ai_studio=True)], "apis": [SVC_GEMINI], "ma": "off",
-                  "users": [{"email": _contractor(3), "type": "EXTERNAL_USER"}], "sas": [], "resources": [], "infra": []})
+                  "users": [{"email": _contractor(3), "type": "EXTERNAL_USER"}], "sas": [], "resources": []})
     # 13. Access denied (403)
     specs.append({"pid": "acme-partner-portal", "name": "Acme Partner Portal", "number": "555000000113", "age": 450, "denied": True})
     # 14. Not verified (Google throttled the scan)
@@ -776,8 +729,6 @@ def _blank_project(spec: dict) -> dict:
         "vertexGrossCostUsd": 0.0, "vertexCacheSavingsUsd": 0.0, "vertexCostUsd": 0.0, "geminiGrossCostUsd": 0.0,
         "geminiCacheSavingsUsd": 0.0, "geminiCostUsd": 0.0, "geminiRequestBytes": 0, "geminiResponseBytes": 0,
         "otherAiGrossCostUsd": 0.0, "otherAiCacheSavingsUsd": 0.0, "otherAiCostUsd": 0.0, "estimatedCostUsd": 0.0, "costUsd": 0.0,
-        "infraServices": [], "infraGrossCostUsd": 0.0, "infraSavingsUsd": 0.0, "infraCostUsd": 0.0, "excludedNonAiInfraCostUsd": 0.0,
-        "totalBillGrossUsd": 0.0, "totalBillSavingsUsd": 0.0, "totalBillCostUsd": 0.0, "totalTcoUsd": 0.0,
         "models": [], "credentialsUsage": [], "usersUsage": [], "apiKeys": [], "serviceAccounts": [], "dailySeries": {},
         "budgetUsd": 100.0, "blocked": False, "createTime": _iso(date(2026, 1, 1), 0),
     }
@@ -971,13 +922,6 @@ def _build_active_project(spec: dict, days_list: list[date], ref: date, seed: in
     p["estimatedCostUsd"] = tot["costUsd"]
     p["costUsd"] = tot["costUsd"]
 
-    # --- infra (same lines the backend builds with _infra_line of backend/infra_costs.py)
-    infra = [_infra_line_demo(*entry[:4], days=len(days_list), status=entry[4] if len(entry) > 4 else "ok", note=entry[5] if len(entry) > 5 else "")
-             for entry in spec.get("infra", [])]
-    p["infraServices"] = infra
-    p["infraGrossCostUsd"] = round(sum(s["grossCostUsd"] for s in infra), 4)
-    p["infraSavingsUsd"] = round(sum(s["savingsUsd"] for s in infra), 4)
-    p["infraCostUsd"] = round(sum(s["costUsd"] for s in infra), 4)
 
     # --- models
     models = []
@@ -1327,22 +1271,11 @@ def _build_summary(projects: list[dict]) -> dict:
         "vertexGrossCostUsd": r("vertexGrossCostUsd"), "vertexCacheSavingsUsd": r("vertexCacheSavingsUsd"), "vertexCostUsd": r("vertexCostUsd"),
         "geminiGrossCostUsd": r("geminiGrossCostUsd"), "geminiCacheSavingsUsd": r("geminiCacheSavingsUsd"), "geminiCostUsd": r("geminiCostUsd"),
         "otherAiGrossCostUsd": r("otherAiGrossCostUsd"), "otherAiCacheSavingsUsd": r("otherAiCacheSavingsUsd"), "otherAiCostUsd": r("otherAiCostUsd"),
-        "estimatedCostUsd": r("estimatedCostUsd"), "infraGrossCostUsd": r("infraGrossCostUsd"), "infraSavingsUsd": r("infraSavingsUsd"),
-        "infraCostUsd": r("infraCostUsd"), "totalBillGrossUsd": r("totalBillGrossUsd"), "totalBillSavingsUsd": r("totalBillSavingsUsd"),
-        "totalBillCostUsd": r("totalBillCostUsd"),
+        "estimatedCostUsd": r("estimatedCostUsd"),
         "totalApiKeys": sum(len(p.get("apiKeys", [])) for p in projects), "totalServiceAccounts": sum(len(p.get("serviceAccounts", [])) for p in projects),
         "totalActiveUsers": len(users), "totalUsersCostUsd": round(users_cost, 4), "totalApiKeysCostUsd": round(key_cost, 4),
         "totalOauthCostUsd": round(oauth_cost, 4), "totalServiceAccountsCostUsd": round(sa_cost, 4),
     }
-
-
-def _finalize_bill(p: dict) -> None:
-    ai_gross = round(p["vertexGrossCostUsd"] + p["geminiGrossCostUsd"] + p["otherAiGrossCostUsd"], 4)
-    ai_sav = round(p["vertexCacheSavingsUsd"] + p["geminiCacheSavingsUsd"] + p["otherAiCacheSavingsUsd"], 4)
-    p["totalBillGrossUsd"] = round(ai_gross + p["infraGrossCostUsd"], 4)
-    p["totalBillSavingsUsd"] = round(ai_sav + p["infraSavingsUsd"], 4)
-    p["totalBillCostUsd"] = round(p["estimatedCostUsd"] + p["infraCostUsd"], 4)
-    p["totalTcoUsd"] = p["totalBillCostUsd"]
 
 
 def _timeline(projects: list[dict]) -> list[dict]:
@@ -1370,7 +1303,7 @@ def _project_has_ai_data(p: dict) -> bool:
         return True
     if any((a.get("service") if isinstance(a, dict) else str(a)) in _CORE_AI_SERVICES for a in (p.get("enabledAiApis") or [])):
         return True
-    if (p.get("estimatedCostUsd", 0.0) or 0.0) > 0 or (p.get("totalBillCostUsd", 0.0) or 0.0) > 0:
+    if (p.get("estimatedCostUsd", 0.0) or 0.0) > 0:
         return True
     if (p.get("totalRequests", 0) or 0) > 0 or (p.get("inferenceRequests", 0) or 0) > 0 or (p.get("totalTokens", 0) or 0) > 0:
         return True
@@ -1421,7 +1354,6 @@ def build_demo_sync_registry_entries(projects: list[dict], ref: date) -> dict:
             "dataReason": reason, "isNewProject": is_new, "firstSeenAt": _iso(ref, 3 if is_new else 120, 6), "lastScannedAt": scanned_at,
             "billingEnabled": bool(p.get("billingEnabled", False)), "skippedNoBilling": bool(p.get("skippedNoBilling", False)), "aiActive": bool(p.get("aiActive", False)),
             "scanStatus": p.get("scanStatus", "OK"), "estimatedCostUsd": round(p.get("estimatedCostUsd", 0.0) or 0.0, 4),
-            "totalBillCostUsd": round(p.get("totalBillCostUsd", p.get("estimatedCostUsd", 0.0)) or 0.0, 4),
             "inferenceRequests": int(p.get("inferenceRequests", 0) or 0), "totalRequests": int(p.get("totalRequests", 0) or 0), "totalTokens": int(p.get("totalTokens", 0) or 0),
             "modelsCount": len(p.get("models", []) or []), "usersCount": len(p.get("usersUsage", []) or []), "resourcesCount": len(p.get("deployedAiResources", []) or []),
             "apiKeysCount": len(p.get("apiKeys", []) or []), "serviceAccountsCount": len(p.get("serviceAccounts", []) or []), "enabledApisCount": len(p.get("enabledAiApis", []) or []),
@@ -1519,9 +1451,9 @@ def build_demo_models_pricing_config(reference_date: str = DEFAULT_REFERENCE_DAT
         "schemaVersion": "1.0", "updatedAt": stamp,
         "sourceServices": {"vertexAiServiceId": "C7E2-9256-1C43", "geminiApiServiceId": "AEFD-7695-64FA",
                            "publisherModelsApi": "https://aiplatform.googleapis.com/v1beta1/publishers/google/models"},
-        "billingSettings": {"vertexBillingCreditDiscountPct": 0.0, "geminiApiBillingCreditDiscountPct": 0.0, "vertexImplicitCacheHitRatioPct": 0.0,
-                            "regionalMultiplierDefault": 1.10, "managedServiceSavingsPct": 0.0, "infraSavingsPct": INFRA_SAVINGS_PCT,
-                            "managedServiceCacheHitRatioPct": 0.0, "geminiApiImplicitCacheHitRatioPct": 0.0, "usdToEurRate": FAKE_USD_TO_EUR, "usdToEurRateAuto": True},
+        "billingSettings": {"vertexBillingCreditDiscountPct": 0.0, "geminiApiBillingCreditDiscountPct": 0.0, "vertexImplicitCacheHitRatioPct": 93.0,
+                            "regionalMultiplierDefault": 1.10, "managedServiceSavingsPct": 0.0,
+                            "geminiApiImplicitCacheHitRatioPct": 0.0, "usdToEurRate": FAKE_USD_TO_EUR, "usdToEurRateAuto": True},
         "oauthClientOwners": {},
         "lastApiSync": {"syncedAt": stamp, "skusScanned": 1240, "skusMatched": len(models), "publisherModelsDiscovered": len(models),
                         "totalConfiguredModels": len(models), "partial": False, "errors": []},
@@ -1551,7 +1483,6 @@ def build_demo_scan_payload(days: int = 30, seed: int = DEFAULT_SEED, reference_
             p = _build_unscanned_project(spec, ref, "no_billing")
         else:
             p = _build_active_project(spec, days_list, ref, seed)
-        _finalize_bill(p)
         projects.append(p)
     _sort_projects(projects)
     _attach_sync_meta(projects, ref)

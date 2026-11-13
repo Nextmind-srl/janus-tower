@@ -144,12 +144,8 @@
 
     function _applySummaryOverridesIfUnfiltered(isUnfilteredAll, s, sFe, sDr, sLf, state) {
       if (!isUnfilteredAll) return;
-      if (s.excludedNonAiInfraCostUsd !== undefined) state.excludedNonAiInfraUsd = s.excludedNonAiInfraCostUsd;
-      else if (sFe.excludedNonAiInfraCostUsd !== undefined) state.excludedNonAiInfraUsd = sFe.excludedNonAiInfraCostUsd;
       if (sFe.dailyBurnRateAiUsd !== undefined) state.dailyBurnAiUsd = sFe.dailyBurnRateAiUsd;
-      if (sFe.dailyBurnRateTcoUsd !== undefined) state.dailyBurnTcoUsd = sFe.dailyBurnRateTcoUsd;
       if (sFe.forecast30dAiUsd !== undefined) state.forecast30dAiUsd = sFe.forecast30dAiUsd;
-      if (sFe.forecast30dTcoUsd !== undefined) state.forecast30dTcoUsd = sFe.forecast30dTcoUsd;
       if (sFe.zombieReasoningEnginesCount !== undefined) state.zombieBuildsCount = sFe.zombieReasoningEnginesCount;
       if (sDr.nonEuResourcesCount !== undefined) state.nonEuResCount = sDr.nonEuResourcesCount;
       (sDr.nonEuDeployedResources || []).forEach(nr => { if (nr.location) state.nonEuResRegions.add(nr.location); });
@@ -180,7 +176,7 @@
       const sLf = s.aiLogForensics || {};
       const isUnfilteredAll = (agg.selProj === 'ALL' && !q);
 
-      let netAiUsd = 0, grossAiUsd = 0, cacheSavedUsd = 0, potentialCacheUsd = 0, infraUsd = 0, idleWasteMonthlyUsd = 0;
+      let netAiUsd = 0, grossAiUsd = 0, cacheSavedUsd = 0, potentialCacheUsd = 0, vertexUsd = 0, geminiUsd = 0, otherAiUsd = 0, idleWasteMonthlyUsd = 0;
       let last7CostUsd = 0, prev7CostUsd = 0, last7Calls = 0, prev7Calls = 0;
       let aiCalls = 0, sysCalls = 0, totTokens = 0, inTokens = 0, outTokens = 0, cachedTokens = 0;
 
@@ -191,7 +187,7 @@
         blindProjs: 0, blindTokens: 0, pubEndpoints: 0, nonCmek: 0, weekendCalls: 0, weekendUsd: 0,
         spikeDays: [], secScores: [], critCount: 0, highCount: 0, medCount: 0,
         secTagCounts: {}, mutationCounts: {}, findingList: [],
-        excludedNonAiInfraUsd: 0, dailyBurnAiUsd: 0, dailyBurnTcoUsd: 0, forecast30dAiUsd: 0, forecast30dTcoUsd: 0,
+        dailyBurnAiUsd: 0, forecast30dAiUsd: 0,
         zombieBuildsCount: 0, nonEuResCount: 0, nonEuResRegions: new Set()
       };
 
@@ -224,7 +220,9 @@
         netAiUsd += cUsd;
         grossAiUsd += Math.max(pAiGross, cUsd + pAiSav);
         cacheSavedUsd += pAiSav;
-        infraUsd += (p.infraCostUsd || 0);
+        vertexUsd += (p.vertexCostUsd || 0);
+        geminiUsd += (p.geminiCostUsd || 0);
+        otherAiUsd += (p.otherAiCostUsd || 0);
         aiCalls += (p.inferenceRequests ?? p.billableRequests ?? 0);
         sysCalls += (p.systemRequests ?? p.systemFreeRequests ?? 0);
         totTokens += (p.totalTokens || 0);
@@ -234,11 +232,8 @@
 
         potentialCacheUsd += (fe.potentialExtraCacheSavingsUsd || 0);
         idleWasteMonthlyUsd += (fe.estimatedMonthlyIdleWasteUsd || 0);
-        fAcc.excludedNonAiInfraUsd += (p.excludedNonAiInfraCostUsd ?? fe.excludedNonAiInfraCostUsd ?? 0);
         fAcc.dailyBurnAiUsd += (fe.dailyBurnRateAiUsd || 0);
-        fAcc.dailyBurnTcoUsd += (fe.dailyBurnRateTcoUsd || 0);
         fAcc.forecast30dAiUsd += (fe.forecast30dAiUsd || 0);
-        fAcc.forecast30dTcoUsd += (fe.forecast30dTcoUsd || 0);
         last7CostUsd += (fe.last7dCostUsd || 0);
         prev7CostUsd += (fe.prev7dCostUsd || 0);
         last7Calls += (fe.last7dRequests || 0);
@@ -252,7 +247,6 @@
       const { italyWeight, euWeight, globalWeight, nonEuWeight } = weights;
       fAcc.nonEuResCount = weights.nonEuResCount;
 
-      const totalBillUsd = isUnfilteredAll && s.totalTcoUsd !== undefined ? s.totalTcoUsd : (netAiUsd + infraUsd);
       _applySummaryOverridesIfUnfiltered(isUnfilteredAll, s, sFe, sDr, sLf, fAcc);
 
       const costTrend7dPct = (isUnfilteredAll && sFe.costTrend7dPct !== undefined)
@@ -298,10 +292,8 @@
       const errPct = (aiCalls + sysCalls + totErrs) > 0 ? ((totErrs / (aiCalls + sysCalls + totErrs)) * 100).toFixed(2) : '0.00';
 
       return {
-        netAiUsd, grossAiUsd, cacheSavedUsd, potentialCacheUsd, infraUsd, idleWasteMonthlyUsd,
-        excludedNonAiInfraUsd: fAcc.excludedNonAiInfraUsd, dailyBurnAiUsd: fAcc.dailyBurnAiUsd,
-        dailyBurnTcoUsd: fAcc.dailyBurnTcoUsd, forecast30dAiUsd: fAcc.forecast30dAiUsd,
-        forecast30dTcoUsd: fAcc.forecast30dTcoUsd, zombieBuildsCount: fAcc.zombieBuildsCount,
+        netAiUsd, grossAiUsd, cacheSavedUsd, potentialCacheUsd, vertexUsd, geminiUsd, otherAiUsd, idleWasteMonthlyUsd,
+        dailyBurnAiUsd: fAcc.dailyBurnAiUsd, forecast30dAiUsd: fAcc.forecast30dAiUsd, zombieBuildsCount: fAcc.zombieBuildsCount,
         nonEuResCount: fAcc.nonEuResCount, nonEuRegionsList, avgLatencyMs,
         http200: fAcc.http200, http429: fAcc.http429, http401_403: fAcc.http401_403,
         http400: fAcc.http400, http5xx: fAcc.http5xx, infErrs: fAcc.infErrs, sysErrs: fAcc.sysErrs,
@@ -313,7 +305,7 @@
         spikeDays: fAcc.spikeDays, critCount: fAcc.critCount, highCount: fAcc.highCount, medCount: fAcc.medCount,
         modelMap, toolMap, regionMap, secTagCounts: fAcc.secTagCounts, mutationCounts: fAcc.mutationCounts,
         userMap, credList, findingList: fAcc.findingList,
-        nonEuWeight, totalBillUsd, costTrend7dPct, requestsTrend7dPct,
+        nonEuWeight, costTrend7dPct, requestsTrend7dPct,
         costTrendArrow, costTrendColor, reqTrendArrow, reqTrendColor,
         costPer1kCalls, costPer1mTokens, cacheHitPct, euPct, itPct, glPct, avgSec, secGrade, totErrs, errPct
       };
@@ -354,21 +346,17 @@
 
         <div data-jt-click="switchTab('projects')" class="jt-kpi bg-white rounded-xl border border-slate-200 p-3 shadow-2xs cursor-pointer hover:border-blue-400 transition">
           <div class="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> TOTAL INVOICE (AI + INFRA)</span>
-            <span class="jt-chip jt-chip--blue px-1.5 py-0.5 rounded bg-blue-50 text-[#0F2A4A] font-extrabold mono">${fmtEur(d.totalBillUsd)}</span>
+            <span><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> AI COST BY SOURCE</span>
+            <span class="jt-chip jt-chip--blue px-1.5 py-0.5 rounded bg-blue-50 text-[#0F2A4A] font-extrabold mono">${fmtEur(d.netAiUsd)}</span>
           </div>
           <div class="flex items-baseline justify-between mt-1">
-            <div class="jt-kpi__value text-xl font-extrabold text-slate-900 mono">${fmtUsd(d.totalBillUsd)}</div>
-            <span class="text-[10px] text-slate-500 mono">AI: <b class="text-emerald-700">${fmtEur(d.netAiUsd)}</b> + Infra: <b>${fmtEur(d.infraUsd)}</b></span>
+            <div class="jt-kpi__value text-xl font-extrabold text-slate-900 mono">${fmtUsd(d.netAiUsd)}</div>
+            <span class="text-[10px] text-slate-500 mono">Vertex: <b class="text-emerald-700">${fmtUsd(d.vertexUsd)}</b> · Gemini: <b>${fmtUsd(d.geminiUsd)}</b></span>
           </div>
           <div class="jt-kpi__note mt-1 flex items-center justify-between text-[10px] text-slate-500 mono">
-            <span>AI INFRA (9 srv): <b>${fmtUsd(d.infraUsd)} (${fmtEur(d.infraUsd)})</b></span>
+            <span title="Gemini Enterprise / Agentspace, NotebookLM, Dialogflow CX, Code Assist, Model Armor">OTHER AI: <b>${fmtUsd(d.otherAiUsd)}</b></span>
             <span>IDLE: <b class="${d.idleWasteMonthlyUsd > 0 ? 'text-rose-600' : 'text-slate-600'}">$${d.idleWasteMonthlyUsd.toFixed(0)}/m</b></span>
           </div>
-          ${d.excludedNonAiInfraUsd > 0 ? `
-          <div class="mt-1 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-800 text-[9px] font-bold mono truncate" title="Cloud SQL on projects with 0 AI calls, excluded from AI TCO">
-            Excluded Non-AI SQL: -${fmtUsd(d.excludedNonAiInfraUsd)}
-          </div>` : ''}
         </div>
 
         <div data-jt-click="switchTab('models')" class="jt-kpi bg-white rounded-xl border border-slate-200 p-3 shadow-2xs cursor-pointer hover:border-blue-400 transition">
@@ -848,12 +836,9 @@
           ? `<span class="${p.totalTokens > 0 ? 'text-slate-800 font-medium' : 'text-slate-400'}">${fmtTok(p.totalTokens)}</span>`
           : `<span class="text-rose-600 font-semibold"><svg class="jt-ico" aria-hidden="true"><use href="#ico-lock"/></svg> 403</span>`;
 
-        const exclSqlUsd = p.excludedNonAiInfraCostUsd ?? (p.finopsExtended && p.finopsExtended.excludedNonAiInfraCostUsd) ?? 0;
         const costHtml = monArea.granted
           ? `<div><span class="text-sm font-extrabold ${p.estimatedCostUsd > 0 ? 'text-emerald-700' : 'text-slate-400'}">${fmtUsd(p.estimatedCostUsd)}</span> <span class="text-[11px] font-bold text-slate-600">(${fmtEur(p.estimatedCostUsd)})</span></div>
-             ${isAiStudioFree ? `<div class="text-[10px] text-amber-700 font-semibold">Free-Tier AI Studio</div>` : ''}
-             ${(p.infraCostUsd || 0) > 0 ? `<div class="text-[10px] text-[#0F2A4A] font-semibold">TCO AI: ${fmtEur(p.totalBillCostUsd || ((p.estimatedCostUsd || 0) + (p.infraCostUsd || 0)))} (Infra AI: ${fmtUsd(p.infraCostUsd)})</div>` : ''}
-             ${exclSqlUsd > 0 ? `<div class="text-[10px] text-slate-500 font-semibold mono" title="Project with 0 AI calls: general Cloud SQL/Infra cost unrelated to AI, excluded from AI TCO">Infra AI: <b>$0.00</b> <span class="px-1 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">(Excluded non-AI SQL: $${exclSqlUsd.toFixed(2)})</span></div>` : ''}`
+             ${isAiStudioFree ? `<div class="text-[10px] text-amber-700 font-semibold">Free-Tier AI Studio</div>` : ''}`
           : `<span class="text-rose-600 font-semibold"><svg class="jt-ico" aria-hidden="true"><use href="#ico-lock"/></svg> 403</span>`;
 
         return `

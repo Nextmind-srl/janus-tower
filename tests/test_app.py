@@ -556,7 +556,7 @@ class TestGoogleRateLimits(unittest.TestCase):
         self.assertEqual(rates["output"], 0.0)
         self.assertEqual(rates["thinking"], 0.0)
 
-    def _run_managed_point(self, savings_pct: float, hit_pct: float) -> dict:
+    def _run_managed_point(self, savings_pct: float) -> dict:
         from collections import defaultdict
         ns = self.ns
         ns["estimate_service_call_cost"] = lambda service, method: (0.01, 1000, 500, "managed-model", "TEST")
@@ -565,7 +565,7 @@ class TestGoogleRateLimits(unittest.TestCase):
             ns["_MODELS_PRICING_MEM_CACHE"] = {"mtime": 0.0, "data": None}
             cfg = ns["load_models_pricing_config"]()
             cfg.setdefault("billingSettings", {}).update(
-                {"managedServiceSavingsPct": savings_pct, "managedServiceCacheHitRatioPct": hit_pct}
+                {"managedServiceSavingsPct": savings_pct}
             )
             ns["save_models_pricing_config"](cfg)
             ns["_MODELS_PRICING_MEM_CACHE"] = {"mtime": 0.0, "data": None}
@@ -580,17 +580,18 @@ class TestGoogleRateLimits(unittest.TestCase):
                     "cost": c_entry["estimatedCostUsd"], "cached": c_entry["cachedTokens"]}
 
     def test_managed_service_uses_configured_savings(self) -> None:
-        zero = self._run_managed_point(0.0, 0.0)
+        zero = self._run_managed_point(0.0)
         self.assertAlmostEqual(zero["gross"], 0.10, places=6)
         self.assertEqual(zero["sav"], 0.0)
         self.assertEqual(zero["cached"], 0)
-        half = self._run_managed_point(50.0, 40.0)
+        half = self._run_managed_point(50.0)
         self.assertAlmostEqual(half["sav"], 0.05, places=6)
         self.assertAlmostEqual(half["cost"], 0.05, places=6)
-        self.assertEqual(half["cached"], int(round(10 * 1000 * 0.40)))
+        # Per-call services: no cached-token share is ever estimated
+        self.assertEqual(half["cached"], 0)
 
     def test_managed_service_full_savings_zeroes_cost_but_keeps_usage(self) -> None:
-        full = self._run_managed_point(100.0, 0.0)
+        full = self._run_managed_point(100.0)
         self.assertAlmostEqual(full["gross"], 0.10, places=6)
         self.assertAlmostEqual(full["sav"], 0.10, places=6)
         self.assertAlmostEqual(full["cost"], 0.0, places=9)
@@ -604,13 +605,17 @@ class TestGoogleRateLimits(unittest.TestCase):
             self.ns["_MODELS_PRICING_MEM_CACHE"] = {"mtime": 0.0, "data": None}
             validate = self.ns["validate_and_apply_models_pricing_update"]
             for key, bad in (("managedServiceSavingsPct", 101), ("managedServiceSavingsPct", -1),
-                             ("managedServiceCacheHitRatioPct", 99), ("managedServiceCacheHitRatioPct", "x")):
+                             ("managedServiceSavingsPct", "x")):
                 ok, err, _ = validate({"billingSettings": {key: bad}})
                 self.assertFalse(ok, f"{key}={bad} must be rejected")
                 self.assertTrue(err)
-            ok, err, cfg = validate({"billingSettings": {"managedServiceSavingsPct": 50, "managedServiceCacheHitRatioPct": 40}})
+            # Removed settings (managed cache hit, infrastructure savings) are ignored, never stored
+            ok, err, cfg = validate({"billingSettings": {"managedServiceSavingsPct": 50, "managedServiceCacheHitRatioPct": 40,
+                                                         "infraSavingsPct": 10}})
             self.assertTrue(ok, err)
             self.assertEqual(cfg["billingSettings"]["managedServiceSavingsPct"], 50.0)
+            self.assertNotIn("managedServiceCacheHitRatioPct", self.ns["DEFAULT_BILLING_SETTINGS"])
+            self.assertNotIn("infraSavingsPct", self.ns["DEFAULT_BILLING_SETTINGS"])
 
     def _gemini_tmp_cfg(self, tmp: str, models: dict, bs: dict | None = None) -> None:
         self.ns["MODELS_PRICING_FILE"] = str(Path(tmp) / "models_pricing_config.json")
@@ -738,17 +743,19 @@ class TestGoogleRateLimits(unittest.TestCase):
             self._gemini_tmp_cfg(tmp, {})
             validate = self.ns["validate_and_apply_models_pricing_update"]
             for key, bad in (("geminiApiImplicitCacheHitRatioPct", 99), ("geminiApiImplicitCacheHitRatioPct", -1),
-                             ("managedServiceSavingsPct", 101), ("managedServiceCacheHitRatioPct", 99)):
+                             ("managedServiceSavingsPct", 101)):
                 ok, _err, _ = validate({"billingSettings": {key: bad}})
                 self.assertFalse(ok, f"{key}={bad} must be rejected")
             ok, err, cfg = validate({"billingSettings": {
-                "geminiApiImplicitCacheHitRatioPct": 86.5, "managedServiceSavingsPct": 10, "managedServiceCacheHitRatioPct": 20}})
+                "geminiApiImplicitCacheHitRatioPct": 86.5, "managedServiceSavingsPct": 10}})
             self.assertTrue(ok, err)
             self.assertEqual(cfg["billingSettings"]["geminiApiImplicitCacheHitRatioPct"], 86.5)
         view = Path(ROOT, "frontend", "js", "views_pricing.js").read_text(encoding="utf-8")
-        for needle in ("pricing-cfg-gemini-cache", "pricing-cfg-managed-savings", "pricing-cfg-managed-cache",
+        for needle in ("pricing-cfg-gemini-cache", "pricing-cfg-managed-savings",
                        "pricing-ov-gem-cache", "window.savePricingModelGeminiCache"):
             self.assertIn(needle, view)
+        for removed in ("pricing-cfg-managed-cache", "pricing-cfg-infra-savings", "infraSavingsPct", "managedServiceCacheHitRatioPct"):
+            self.assertNotIn(removed, view)
         start = view.index("function openPricingModelDrawer(")
         end = view.index("function closePricingModelDrawer(")
         drawer = view[start:end]
@@ -791,7 +798,16 @@ class TestGoogleRateLimits(unittest.TestCase):
             self.ns["_MODELS_PRICING_MEM_CACHE"] = {"mtime": 0.0, "data": None}
             bs = self.ns["get_billing_settings"]()
             self.assertEqual(bs.get("managedServiceSavingsPct"), 0.0)
-            self.assertEqual(bs.get("managedServiceCacheHitRatioPct"), 0.0)
+            self.assertNotIn("managedServiceCacheHitRatioPct", bs)
+
+    def test_vertex_implicit_cache_default_is_93(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ns["MODELS_PRICING_FILE"] = str(Path(tmp) / "models_pricing_config.json")
+            self.ns["_MODELS_PRICING_MEM_CACHE"] = {"mtime": 0.0, "data": None}
+            self.assertEqual(self.ns["get_billing_settings"]()["vertexImplicitCacheHitRatioPct"], 93.0)
+            self.assertEqual(self.ns["get_model_rates"]("gemini-2.5-pro", "global")["implicitCacheHitRatioPct"], 93.0)
+            # the discounts stay neutral
+            self.assertEqual(self.ns["get_billing_settings"]()["vertexBillingCreditDiscountPct"], 0.0)
 
     def test_get_model_rates_applies_regional_rate_to_non_global_locations(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -808,6 +824,9 @@ class TestGoogleRateLimits(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.ns["MODELS_PRICING_FILE"] = str(Path(tmp) / "models_pricing_config.json")
             self.ns["_MODELS_PRICING_MEM_CACHE"] = {"mtime": 0.0, "data": None}
+            ok, err, _ = self.ns["validate_and_apply_models_pricing_update"](
+                {"billingSettings": {"vertexImplicitCacheHitRatioPct": 0}})
+            self.assertTrue(ok, err)
             mon_results = {
                 "vertex_tok": [
                     {

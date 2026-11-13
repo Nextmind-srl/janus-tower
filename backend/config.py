@@ -102,11 +102,10 @@ REDIRECT_URI = os.environ.get("OAUTH_REDIRECT_URI", f"http://{LOOPBACK_HOST}:{PO
 DEFAULT_BILLING_SETTINGS = {
     "vertexBillingCreditDiscountPct": 0.0,
     "geminiApiBillingCreditDiscountPct": 0.0,
-    "vertexImplicitCacheHitRatioPct": 0.0,
+    # Typical share of Vertex AI input tokens billed at the cached rate (Gemini implicit caching); calibrate it on your billing export
+    "vertexImplicitCacheHitRatioPct": 93.0,
     "regionalMultiplierDefault": 1.10,
     "managedServiceSavingsPct": 0.0,
-    "infraSavingsPct": 0.0,
-    "managedServiceCacheHitRatioPct": 0.0,
     "geminiApiImplicitCacheHitRatioPct": 0.0,
     "usdToEurRate": 0.92,
     "usdToEurRateAuto": True,
@@ -854,7 +853,7 @@ def _select_location_rates(raw_rates: dict, location: str = "global", is_estimat
         "global_output": out_base,
         "regional_input": reg_in,
         "regional_output": reg_out,
-        "implicitCacheHitRatioPct": float(raw_rates.get("implicitCacheHitRatioPct", bs.get("vertexImplicitCacheHitRatioPct", 0.0)) or 0.0),
+        "implicitCacheHitRatioPct": float(raw_rates.get("implicitCacheHitRatioPct", bs.get("vertexImplicitCacheHitRatioPct", DEFAULT_BILLING_SETTINGS["vertexImplicitCacheHitRatioPct"])) or 0.0),
         "billingCreditDiscountPct": float(raw_rates.get("billingCreditDiscountPct", bs.get("vertexBillingCreditDiscountPct", 0.0)) or 0.0),
         "source": src,
         "isEstimated": bool(is_estimated or reg_calculated),
@@ -1598,8 +1597,6 @@ _BILLING_SETTINGS_LIMITS = {
     "vertexImplicitCacheHitRatioPct": (0.0, 98.0),
     "regionalMultiplierDefault": (1.0, 3.0),
     "managedServiceSavingsPct": (0.0, 100.0),
-    "infraSavingsPct": (0.0, 100.0),
-    "managedServiceCacheHitRatioPct": (0.0, 98.0),
     "geminiApiImplicitCacheHitRatioPct": (0.0, 98.0),
     "usdToEurRate": (0.5, 1.5),
 }

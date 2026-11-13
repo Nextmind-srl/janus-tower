@@ -922,9 +922,9 @@
       "table_id": null,
       "tbody_id": null,
       "headers": [
-        "Cloud Billing Service & Service ID",
+        "AI Service & Service ID",
         "List Price Cost (€ / $)",
-        "Savings (Neg. / CUD / Cache)",
+        "Savings (Credits / Cache)",
         "Net Subtotal (€ / $)"
       ]
     },
@@ -1059,7 +1059,7 @@
     }
   ],
   "kpi_labels": [
-    "Net AI Cost & GCP Invoice",
+    "Net AI Cost",
     "AI Calls (LLM)",
     "Consumed Tokens",
     "Perimeter & Governance",
@@ -1069,7 +1069,7 @@
     "🆕 New / Forced",
     "💰 NET AI COST",
     "⚡ CACHE HIT & SAVED",
-    "🧾 TOTAL INVOICE (AI + INFRA)",
+    "AI COST BY SOURCE",
     "📐 UNIT ECONOMICS",
     "🚀 VOLUME & TOKENS",
     "🇪🇺 GDPR RESIDENCY",
@@ -1088,7 +1088,7 @@
     "Critical & High Risks",
     "Model Armor Violations",
     "Key & EU Compliance",
-    "Net AI Cost (Vertex + Gemini)",
+    "Net AI Cost (all AI services)",
     "AI Calls (LLM)",
     "AI Security Score",
     "💰 TOTAL ATTRIBUTED SPEND (PERIOD)",

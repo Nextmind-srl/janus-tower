@@ -944,17 +944,18 @@
         saCost, saCalls, saTokens,
         projTotalCost, pctOauth, pctKeys, pctSa
       } = idCosts;
-      const vGross = (p.vertexGrossCostUsd || p.vertexCostUsd || 0) + (p.otherAiGrossCostUsd || p.otherAiCostUsd || 0);
-      const vSav = (p.vertexCacheSavingsUsd || 0) + (p.otherAiCacheSavingsUsd || 0);
-      const vNet = (p.vertexCostUsd || 0) + (p.otherAiCostUsd || 0);
+      const vGross = p.vertexGrossCostUsd || p.vertexCostUsd || 0;
+      const vSav = p.vertexCacheSavingsUsd || 0;
+      const vNet = p.vertexCostUsd || 0;
       const gGross = p.geminiGrossCostUsd || p.geminiCostUsd || 0;
       const gSav = p.geminiCacheSavingsUsd || 0;
       const gNet = p.geminiCostUsd || 0;
-      const infList = p.infraServices || [];
-      const exclNonAiUsd = p.excludedNonAiInfraCostUsd ?? (p.finopsExtended && p.finopsExtended.excludedNonAiInfraCostUsd) ?? 0;
-      const billGross = p.totalBillGrossUsd || (vGross + gGross + (p.infraGrossCostUsd || 0));
-      const billSav = p.totalBillSavingsUsd || (vSav + gSav + (p.infraSavingsUsd || 0));
-      const billNet = p.totalBillCostUsd || (vNet + gNet + (p.infraCostUsd || 0));
+      const oGross = p.otherAiGrossCostUsd || p.otherAiCostUsd || 0;
+      const oSav = p.otherAiCacheSavingsUsd || 0;
+      const oNet = p.otherAiCostUsd || 0;
+      const billGross = vGross + gGross + oGross;
+      const billSav = vSav + gSav + oSav;
+      const billNet = vNet + gNet + oNet;
 
       const dynamicVertexModelsLabel = (p.models || [])
         .filter(m => !(m.modelId || '').includes('AI Studio'))
@@ -963,44 +964,12 @@
         .join(' / ') || 'Vertex AI & Discovery Engine Models';
 
       const tdGrossClass = 'py-2 px-3 text-right mono text-slate-700';
-      const infraRowsHtml = infList.map(inf => {
-        const sName = inf.shortName || inf.name || inf.serviceName || inf.service || 'Cloud Infrastructure';
-        const sIdBadge = inf.serviceId ? `<span class="jt-chip jt-chip--gray ml-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 text-[9px] font-bold mono">${escapeHtml(inf.serviceId)}</span>` : '';
-        const isExcl = Boolean(inf.excludedNonAi);
-        const sDet = inf.details || [
-          Array.isArray(inf.instances) ? inf.instances.join(', ') : (inf.instances ? `${inf.instances} instances` : ''),
-          (inf.locations || []).length > 0 ? inf.locations.join(', ') : '',
-          inf.activeDays ? `${inf.activeDays} active days` : '',
-          inf.exclusionReason || ''
-        ].filter(Boolean).join(' · ') || 'Related service';
-        const sNet = inf.costUsd ?? inf.netCostUsd ?? 0;
-        const sGross = inf.grossCostUsd ?? sNet;
-        const sNegSav = inf.negotiatedSavingsUsd || 0;
-        const sCudSav = inf.cudSavingsUsd || 0;
-        const sSav = (inf.savingsUsd !== undefined) ? inf.savingsUsd : (sNegSav + sCudSav);
-        const savBreakLabel = sCudSav > 0
-          ? `Neg. -${fmtEur(sNegSav)} · CUD -${fmtEur(sCudSav)}`
-          : (sSav > 0 ? 'Contract discount' : '—');
-        return `
-          <tr class="border-b border-slate-100 text-xs ${isExcl ? 'bg-slate-50/80 text-slate-400' : ''}">
-            <td class="py-2 px-3 font-semibold ${isExcl ? 'text-slate-500' : 'text-slate-800'}">
-              ${inf.icon ? escapeHtml(inf.icon) : `<svg class="jt-ico" aria-hidden="true"><use href="#ico-doc"/></svg>`} ${escapeHtml(sName)} ${sIdBadge} <span class="text-[10px] text-slate-500 font-normal">(${escapeHtml(sDet)})</span>
-              ${isExcl ? `<span class="jt-chip jt-chip--green ml-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[9px] font-extrabold mono" title="${escapeHtml(inf.exclusionReason || 'Project with 0 AI calls')}">EXCLUDED FROM AI TCO (Non-AI SQL excluded: $${sNet.toFixed(2)})</span>` : ''}
-            </td>
-            <td class="${escapeHtml(tdGrossClass)}">${fmtEur(sGross)} <span class="text-[10px] text-slate-400">(${fmtUsd(sGross)})</span></td>
-            <td class="py-2 px-3 text-right mono text-emerald-700 font-semibold">${escapeHtml(sSav > 0 ? `-${fmtEur(sSav)}` : '0,00 €')} <span class="text-[10px] text-slate-400">(${escapeHtml(savBreakLabel)})</span></td>
-            <td class="py-2 px-3 text-right mono font-bold ${isExcl ? 'text-slate-400 line-through' : 'text-slate-900'}">${escapeHtml(isExcl ? `$0.00 AI (SQL: ${fmtUsd(sNet)})` : `${fmtEur(sNet)} (${fmtUsd(sNet)})`)}</td>
-          </tr>
-        `;
-      }).join('');
 
       setSafeHtml(body, `
         <div class="jt-kpi-grid grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div class="jt-kpi p-3.5 rounded-xl bg-white border border-slate-200">
-            <div class="jt-kpi__label text-slate-400 text-[11px]">Net AI Cost (Vertex + Gemini)</div>
+            <div class="jt-kpi__label text-slate-400 text-[11px]">Net AI Cost (all AI services)</div>
             <div class="jt-kpi__value text-xl font-extrabold text-slate-900 mono mt-0.5">${monArea.granted ? escapeHtml(`${fmtEur(p.estimatedCostUsd)} (${fmtUsd(p.estimatedCostUsd)})`) : `<svg class="jt-ico" aria-hidden="true"><use href="#ico-lock"/></svg> 403`}</div>
-            ${(p.infraCostUsd || 0) > 0 ? `<div class="jt-kpi__note text-[10px] text-[#0F2A4A] font-bold mt-0.5"><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> Total Invoice (11 srv): ${fmtEur(billNet)} (${fmtUsd(billNet)})</div>` : ''}
-            ${exclNonAiUsd > 0 ? `<div class="jt-kpi__note text-[10px] text-emerald-800 font-bold mono mt-0.5" title="SQL service on a project with 0 AI calls, excluded from AI TCO">AI Infra: $0.00 (Non-AI SQL excluded: $${exclNonAiUsd.toFixed(2)})</div>` : ''}
           </div>
           <div class="jt-kpi p-3.5 rounded-xl bg-white border border-slate-200">
             <div class="jt-kpi__label text-slate-400 text-[11px]">AI Calls (LLM)</div>
@@ -1019,16 +988,16 @@
 
         <div class="jt-table-panel bg-emerald-50/50 rounded-xl border border-emerald-200 p-4 space-y-2">
           <div class="${escapeHtml(CLS_FLEX_WRAP_BETWEEN)}">
-            <h4 class="jt-drawer__section-title text-xs font-bold uppercase tracking-wider text-emerald-900"><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> Cloud Billing Invoice Reconciliation (List Price · Neg./CUD/Cache Discounts · Net)</h4>
-            <span class="text-[11px] text-emerald-800 font-semibold">Project Invoice Total: <b>${fmtEur(billNet)}</b> (includes savings of <b>-${fmtEur(billSav)}</b> on <b>${fmtEur(billGross)}</b> list price)</span>
+            <h4 class="jt-drawer__section-title text-xs font-bold uppercase tracking-wider text-emerald-900"><svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> AI Cost Breakdown (List Price · Credits / Cache Savings · Net)</h4>
+            <span class="text-[11px] text-emerald-800 font-semibold">Project AI Total: <b>${fmtEur(billNet)}</b> (includes savings of <b>-${fmtEur(billSav)}</b> on <b>${fmtEur(billGross)}</b> list price)</span>
           </div>
           <div class="overflow-x-auto">
           <table class="jt-table w-full min-w-[640px] text-left border-collapse bg-white rounded-lg overflow-hidden border border-emerald-100">
             <thead>
               <tr class="border-b border-slate-200 text-[10px] uppercase text-slate-500 bg-slate-50">
-                <th class="py-2 px-3">Cloud Billing Service &amp; Service ID</th>
+                <th class="py-2 px-3">AI Service &amp; Service ID</th>
                 <th class="py-2 px-3 text-right">List Price Cost (€ / $)</th>
-                <th class="py-2 px-3 text-right">Savings (Neg. / CUD / Cache)</th>
+                <th class="py-2 px-3 text-right">Savings (Credits / Cache)</th>
                 <th class="py-2 px-3 text-right">Net Subtotal (€ / $)</th>
               </tr>
             </thead>
@@ -1045,9 +1014,14 @@
                 <td class="py-2 px-3 text-right mono text-emerald-700 font-semibold">-${fmtEur(gSav)} <span class="text-[10px] text-slate-400">(Context Caching)</span></td>
                 <td class="py-2 px-3 text-right mono font-extrabold text-emerald-700">${fmtEur(gNet)} (${fmtUsd(gNet)})</td>
               </tr>
-              ${infraRowsHtml}
+              <tr class="border-b border-slate-100 text-xs">
+                <td class="py-2 px-3 font-bold text-slate-800"><svg class="jt-ico" aria-hidden="true"><use href="#ico-puzzle"/></svg> Other AI services <span class="text-[10px] text-slate-500 font-normal">(Gemini Enterprise / Agentspace, NotebookLM, Dialogflow CX, Code Assist, Model Armor · per-call estimate)</span></td>
+                <td class="${escapeHtml(tdGrossClass)}">${fmtEur(oGross)} <span class="text-[10px] text-slate-400">(${fmtUsd(oGross)})</span></td>
+                <td class="py-2 px-3 text-right mono text-emerald-700 font-semibold">-${fmtEur(oSav)} <span class="text-[10px] text-slate-400">(Managed savings)</span></td>
+                <td class="py-2 px-3 text-right mono font-extrabold text-emerald-700">${fmtEur(oNet)} (${fmtUsd(oNet)})</td>
+              </tr>
               <tr class="bg-slate-50 font-extrabold text-xs">
-                <td class="py-2.5 px-3 text-slate-900">PROJECT INVOICE TOTAL (${escapeHtml(2 + infList.length)} SERVICES)</td>
+                <td class="py-2.5 px-3 text-slate-900">PROJECT AI TOTAL</td>
                 <td class="py-2.5 px-3 text-right mono text-slate-800">${fmtEur(billGross)} (${fmtUsd(billGross)})</td>
                 <td class="py-2.5 px-3 text-right mono text-emerald-700">-${fmtEur(billSav)}</td>
                 <td class="py-2.5 px-3 text-right mono text-[#0F2A4A] text-sm">${fmtEur(billNet)} (${fmtUsd(billNet)})</td>

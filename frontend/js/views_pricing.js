@@ -554,7 +554,7 @@
       const bSettings = cfg.billingSettings || {};
       const vDisc = Number(bSettings.vertexBillingCreditDiscountPct ?? bSettings.vertexCreditDiscountPct ?? 0);
       const gDisc = Number(bSettings.geminiApiBillingCreditDiscountPct ?? bSettings.geminiApiCreditDiscountPct ?? 0);
-      const iCache = Number(bSettings.vertexImplicitCacheHitRatioPct ?? bSettings.implicitCacheHitPct ?? 0);
+      const iCache = Number(bSettings.vertexImplicitCacheHitRatioPct ?? bSettings.implicitCacheHitPct ?? 93);
       const rMult = Number(bSettings.regionalMultiplierDefault ?? 1.1);
 
       setSafeHtml(bannerEl, `
@@ -765,7 +765,7 @@
       const bs = cfg.billingSettings || {};
       const vDisc = Number(bs.vertexBillingCreditDiscountPct ?? bs.vertexCreditDiscountPct ?? 0);
       const gDisc = Number(bs.geminiApiBillingCreditDiscountPct ?? bs.geminiApiCreditDiscountPct ?? 0);
-      const iCache = Number(bs.vertexImplicitCacheHitRatioPct ?? bs.implicitCacheHitPct ?? 0);
+      const iCache = Number(bs.vertexImplicitCacheHitRatioPct ?? bs.implicitCacheHitPct ?? 93);
       const rMult = Number(bs.regionalMultiplierDefault ?? 1.1);
       const usdEur = Number(bs.usdToEurRate ?? 0.92);
       const usdEurAuto = bs.usdToEurRateAuto !== false;
@@ -775,8 +775,6 @@
         : 'Google Cloud rate not synced yet: run "Sync from Google Cloud".';
       const gCache = Number(bs.geminiApiImplicitCacheHitRatioPct ?? 0);
       const msSav = Number(bs.managedServiceSavingsPct ?? 0);
-      const infSav = Number(bs.infraSavingsPct ?? 0);
-      const msCache = Number(bs.managedServiceCacheHitRatioPct ?? 0);
 
       setSafeHtml(box, `
         <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-3">
@@ -785,7 +783,7 @@
               <svg class="jt-ico" aria-hidden="true"><use href="#ico-chart"/></svg> Billing Settings &amp; Cost Calculation Parameters
             </h3>
             <p class="text-xs text-slate-600 mt-0.5">
-              Defaults are neutral (<code class="mono">0%</code> discounts, <code class="mono">0%</code> implicit cache hit, <code class="mono">1.10×</code> regional multiplier) so estimated costs reflect list prices unless your organization has negotiated discounts.
+              Defaults: <code class="mono">0%</code> discounts, <code class="mono">93%</code> Vertex AI implicit cache hit, <code class="mono">1.10×</code> regional multiplier. Calibrate them on your Cloud Billing export (see Cost calibration). Saving recalculates the cached costs instantly, without a new scan.
             </p>
           </div>
           <div class="flex items-center gap-2">
@@ -1000,57 +998,7 @@
             </div>
           </div>
 
-          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <label for="pricing-cfg-infra-savings" class="block text-xs font-extrabold text-[#0F2A4A]">
-                  Infrastructure savings (%)
-                </label>
-                <p class="text-xs text-slate-600 mt-0.5">
-                  Discount applied to the list-price estimates of Cloud SQL, Memorystore Redis and Compute Engine (negotiated prices, committed use). 0% = public list price (0%–100%).
-                </p>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <input
-                  type="number"
-                  id="pricing-cfg-infra-savings"
-                  aria-label="Infrastructure savings percentage"
-                  min="0"
-                  max="100"
-                  step="0.5"
-                  value="${escapeHtml(infSav)}"
-                  class="w-24 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-right text-xs font-bold mono text-slate-900"
-                />
-                <span class="text-xs font-bold text-slate-500 mono">%</span>
-              </div>
-            </div>
-          </div>
 
-          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <label for="pricing-cfg-managed-cache" class="block text-xs font-extrabold text-[#0F2A4A]">
-                  Managed services cache hit (%)
-                </label>
-                <p class="text-xs text-slate-600 mt-0.5">
-                  Share of input tokens treated as cached for managed-service call estimates (0%–98%).
-                </p>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <input
-                  type="number"
-                  id="pricing-cfg-managed-cache"
-                  aria-label="Managed services cache hit percentage"
-                  min="0"
-                  max="98"
-                  step="0.5"
-                  value="${escapeHtml(msCache)}"
-                  class="w-24 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-right text-xs font-bold mono text-slate-900"
-                />
-                <span class="text-xs font-bold text-slate-500 mono">%</span>
-              </div>
-            </div>
-          </div>
         </div>
       `);
     }
@@ -1104,14 +1052,10 @@
       const eAutoEl = document.getElementById('pricing-cfg-usd-eur-auto');
       const gcEl = document.getElementById('pricing-cfg-gemini-cache');
       const msEl = document.getElementById('pricing-cfg-managed-savings');
-      const mcEl = document.getElementById('pricing-cfg-managed-cache');
-      const infEl = document.getElementById('pricing-cfg-infra-savings');
 
       const eVal = Number(eEl ? eEl.value : 0.92);
       const gcVal = Number(gcEl ? gcEl.value : 0);
       const msVal = Number(msEl ? msEl.value : 0);
-      const infVal = Number(infEl ? infEl.value : 0);
-      const mcVal = Number(mcEl ? mcEl.value : 0);
       const vVal = Number(vEl ? vEl.value : 0);
       const gVal = Number(gEl ? gEl.value : 0);
       const cVal = Number(cEl ? cEl.value : 0);
@@ -1147,14 +1091,6 @@
         _showPricingSettingsFeedback('err', 'Managed services savings must be between 0% and 100%.');
         return;
       }
-      if (Number.isNaN(infVal) || infVal < 0 || infVal > 100) {
-        _showPricingSettingsFeedback('err', 'Infrastructure savings must be between 0% and 100%.');
-        return;
-      }
-      if (Number.isNaN(mcVal) || mcVal < 0 || mcVal > 98) {
-        _showPricingSettingsFeedback('err', 'Managed services cache hit must be between 0% and 98%.');
-        return;
-      }
 
       await _submitBillingSettingsPayload({
         vertexBillingCreditDiscountPct: vVal,
@@ -1164,9 +1100,7 @@
         usdToEurRate: eVal,
         usdToEurRateAuto: eAutoEl ? !!eAutoEl.checked : true,
         geminiApiImplicitCacheHitRatioPct: gcVal,
-        managedServiceSavingsPct: msVal,
-        infraSavingsPct: infVal,
-        managedServiceCacheHitRatioPct: mcVal
+        managedServiceSavingsPct: msVal
       });
     }
     window.savePricingBillingSettings = savePricingBillingSettings;
@@ -1175,14 +1109,12 @@
       await _submitBillingSettingsPayload({
         vertexBillingCreditDiscountPct: 0.0,
         geminiApiBillingCreditDiscountPct: 0.0,
-        vertexImplicitCacheHitRatioPct: 0.0,
+        vertexImplicitCacheHitRatioPct: 93.0,
         regionalMultiplierDefault: 1.10,
         usdToEurRate: 0.92,
         usdToEurRateAuto: true,
         geminiApiImplicitCacheHitRatioPct: 0.0,
-        managedServiceSavingsPct: 0.0,
-        infraSavingsPct: 0.0,
-        managedServiceCacheHitRatioPct: 0.0
+        managedServiceSavingsPct: 0.0
       });
     }
     window.resetPricingBillingSettingsToDefaults = resetPricingBillingSettingsToDefaults;

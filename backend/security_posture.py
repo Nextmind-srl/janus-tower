@@ -754,17 +754,12 @@ def enrich_scan_payload_security(payload: dict) -> dict:
     tot_w_all = sum(cat_weights.values())
     global_regions_sorted = sorted(global_reg_map.values(), key=lambda x: (x["costUsd"], x["tokens"], x["calls"], x["resourcesCount"]), reverse=True)
 
-    # Recalculate global Infra Cost & Total Bill / TCO after Step 1 normalization
+    # Recalculate global AI cost totals after Step 1 normalization
     tot_ai_cost_usd = round(sum(float(p.get("estimatedCostUsd", p.get("costUsd", 0.0)) or 0.0) for p in projects), 4)
     if tot_ai_cost_usd == 0.0 and float(summary.get("estimatedCostUsd", summary.get("totalCostUsd", 0.0)) or 0.0) > 0:
         tot_ai_cost_usd = round(float(summary.get("estimatedCostUsd", summary.get("totalCostUsd", 0.0)) or 0.0), 4)
     tot_ai_gross_usd = round(sum(float(p.get("grossCostUsd", p.get("estimatedCostUsd", 0.0)) or 0.0) for p in projects), 4)
     tot_ai_savings_usd = round(tot_cache_savings, 4)
-    tot_infra_cost_usd = round(sum(float(p.get("infraCostUsd", 0.0) or 0.0) for p in projects), 4)
-    tot_infra_gross_usd = round(sum(float(p.get("infraGrossCostUsd", 0.0) or 0.0) for p in projects), 4)
-    tot_infra_sav_usd = round(sum(float(p.get("infraSavingsUsd", 0.0) or 0.0) for p in projects), 4)
-    tot_excl_infra_usd = round(sum(float(p.get("excludedNonAiInfraCostUsd", 0.0) or 0.0) for p in projects), 4)
-    tot_bill_cost_usd = round(tot_ai_cost_usd + tot_infra_cost_usd, 4)
     tot_prompt_all = tot_in_tok + tot_cached_tok
     global_cache_hit_pct = round((tot_cached_tok / tot_prompt_all) * 100.0, 2) if tot_prompt_all > 0 else 0.0
 
@@ -781,15 +776,6 @@ def enrich_scan_payload_security(payload: dict) -> dict:
     summary["cacheSavingsUsd"] = tot_ai_savings_usd
     summary["savedByCachingUsd"] = tot_ai_savings_usd
     summary["cacheHitRatePct"] = global_cache_hit_pct
-    summary["infraCostUsd"] = tot_infra_cost_usd
-    summary["totalInfraCostUsd"] = tot_infra_cost_usd
-    summary["infraGrossCostUsd"] = tot_infra_gross_usd
-    summary["infraSavingsUsd"] = tot_infra_sav_usd
-    summary["excludedNonAiInfraCostUsd"] = tot_excl_infra_usd
-    summary["totalBillCostUsd"] = tot_bill_cost_usd
-    summary["totalTcoUsd"] = tot_bill_cost_usd
-    summary["totalBillGrossUsd"] = round(float(summary.get("grossCostUsd", tot_ai_cost_usd) or 0.0) + tot_infra_gross_usd, 4)
-    summary["totalBillSavingsUsd"] = round(tot_ai_savings_usd + tot_infra_sav_usd, 4)
 
     summary["securityPosture"] = {
         "averageScore": avg_score,
@@ -843,7 +829,6 @@ def enrich_scan_payload_security(payload: dict) -> dict:
     reqs_trend_7d_pct = round(((last7_reqs - prev7_reqs) / float(prev7_reqs)) * 100.0, 1) if prev7_reqs > 0 else 0.0
 
     global_daily_burn_ai = round(tot_ai_cost_usd / days_window, 4)
-    global_daily_burn_tco = round(tot_bill_cost_usd / days_window, 4)
 
     # Compute Project Budgets status (Step 4)
     budgets_cfg = (load_budgets() or {}).get("projects", {}) or {}
@@ -853,10 +838,9 @@ def enrich_scan_payload_security(payload: dict) -> dict:
         b_cfg_item = budgets_cfg.get(pid_b, {})
         b_val = float(b_cfg_item.get("budgetUsd", p.get("budgetUsd", 0.0)) or 0.0) if isinstance(b_cfg_item, dict) else float(b_cfg_item or p.get("budgetUsd", 0.0) or 0.0)
         spent_ai = round(float(p.get("estimatedCostUsd", p.get("costUsd", 0.0)) or 0.0), 4)
-        spent_tco = round(float(p.get("totalBillCostUsd", p.get("totalTcoUsd", spent_ai)) or 0.0), 4)
-        fc30 = float((p.get("finopsExtended") or {}).get("forecast30dTcoUsd", 0.0) or 0.0)
-        if b_val > 0 and (spent_tco > 0 or int(p.get("inferenceRequests", 0) or 0) > 0 or len(p.get("deployedAiResources", []) or []) > 0 or pid_b in budgets_cfg):
-            util_pct = round((spent_tco / b_val) * 100.0, 1)
+        fc30 = float((p.get("finopsExtended") or {}).get("forecast30dAiUsd", 0.0) or 0.0)
+        if b_val > 0 and (spent_ai > 0 or int(p.get("inferenceRequests", 0) or 0) > 0 or len(p.get("deployedAiResources", []) or []) > 0 or pid_b in budgets_cfg):
+            util_pct = round((spent_ai / b_val) * 100.0, 1)
             b_status_str = "OVER_BUDGET" if util_pct >= 100.0 else ("WARNING" if util_pct >= 80.0 else "OK")
             project_budgets_list.append({
                 "projectId": pid_b,
@@ -865,16 +849,13 @@ def enrich_scan_payload_security(payload: dict) -> dict:
                 "monthlyBudgetUsd": round(b_val, 2),
                 "spentAiUsd": spent_ai,
                 "costAiUsd": spent_ai,
-                "spentTcoUsd": spent_tco,
-                "totalTcoUsd": spent_tco,
-                "currentSpendUsd": spent_tco,
+                "currentSpendUsd": spent_ai,
                 "utilizationPct": util_pct,
                 "budgetUsedPct": util_pct,
                 "forecast30dUsd": round(fc30, 2),
-                "forecast30dTcoUsd": round(fc30, 2),
                 "status": b_status_str
             })
-    project_budgets_list.sort(key=lambda x: (x["utilizationPct"], x["spentTcoUsd"]), reverse=True)
+    project_budgets_list.sort(key=lambda x: (x["utilizationPct"], x["spentAiUsd"]), reverse=True)
 
     tot_prompt_all = tot_in_tok + tot_cached_tok
     summary["finopsExtended"] = {
@@ -889,9 +870,7 @@ def enrich_scan_payload_security(payload: dict) -> dict:
         "zombieReasoningEngines": all_zombie_engines,
         "zombieReasoningEnginesCount": len(all_zombie_engines),
         "dailyBurnRateAiUsd": global_daily_burn_ai,
-        "dailyBurnRateTcoUsd": global_daily_burn_tco,
         "forecast30dAiUsd": round(global_daily_burn_ai * 30.0, 2),
-        "forecast30dTcoUsd": round(global_daily_burn_tco * 30.0, 2),
         "last7CostUsd": last7_cost,
         "last7dCostUsd": last7_cost,
         "prev7CostUsd": prev7_cost,
@@ -902,7 +881,6 @@ def enrich_scan_payload_security(payload: dict) -> dict:
         "prev7Requests": prev7_reqs,
         "prev7dRequests": prev7_reqs,
         "requestsTrend7dPct": reqs_trend_7d_pct,
-        "excludedNonAiInfraCostUsd": tot_excl_infra_usd,
         "projectBudgets": project_budgets_list
     }
 

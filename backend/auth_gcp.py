@@ -365,7 +365,7 @@ def update_scan_progress(
             else:
                 SCAN_PROGRESS["stepIndex"] = 4
                 SCAN_PROGRESS["stepBadge"] = f"Phase 4/4 • {tot}/{tot} projects"
-                SCAN_PROGRESS["stepDesc"] = "Final FinOps TCO and Data Residency aggregation, saving cache..."
+                SCAN_PROGRESS["stepDesc"] = "Final FinOps and Data Residency aggregation, saving cache..."
 
             if explicit_phase:
                 SCAN_PROGRESS["stepBadge"] = explicit_phase

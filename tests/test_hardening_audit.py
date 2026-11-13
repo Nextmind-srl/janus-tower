@@ -63,8 +63,8 @@ class TestHardening(unittest.TestCase):
                 self.assertIn("HttpOnly", line, line)
                 self.assertIn("SameSite=Lax", line, line)
 
-    def test_nessun_globals_nel_calcolo_infra(self):
-        self.assertNotIn("globals()", read("backend/infra_costs.py"))
+    def test_nessun_globals_nel_calcolo_costi(self):
+        self.assertNotIn("globals()", read("backend/project_inspector.py"))
 
 
 if __name__ == "__main__":

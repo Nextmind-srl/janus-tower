@@ -727,6 +727,26 @@ def _gemini_api_credit_discount_ratio() -> float:
     return max(0.0, min(0.95, pct / 100.0))
 
 
+# Model whose rates price the Gemini API fallbacks (payload bytes / per-call estimate), where the model is unknown
+GEMINI_API_FALLBACK_MODEL = "gemini-2.5-flash"
+
+
+def gemini_api_token_price(model_lbl: str, in_tok: int, out_tok: int) -> tuple[int, float, float]:
+    """(cached input tokens, gross USD, credit savings USD) for paid Gemini API tokens.
+
+    Same formula for the token-metric path and both fallbacks, and reused by the instant repricing:
+    the configured implicit cache share of the input is billed at the cached-input rate.
+    """
+    rates = get_gemini_api_rates(model_lbl)
+    cached_tok = int(round(in_tok * (float(rates.get("cacheHitRatioPct", 0.0) or 0.0) / 100.0)))
+    gross_usd = (
+        (in_tok - cached_tok) * rates["input"]
+        + cached_tok * rates["cache_read_input"]
+        + out_tok * rates["output"]
+    ) / 1_000_000.0
+    return cached_tok, gross_usd, gross_usd * _gemini_api_credit_discount_ratio()
+
+
 GEMINI_API_UNATTRIBUTED_ID = "gemini-api:unattributed"
 GEMINI_API_UNATTRIBUTED_LABEL = "Gemini API — usage not attributable to a credential"
 
@@ -856,13 +876,7 @@ def _process_gemini_api_payload_bytes(
                     gross_usd = 0.0
                     result["geminiFreeTierDetected"] = True
                 else:
-                    rates = get_gemini_api_rates(model_lbl)
-                    cached_tok = int(round(in_tok * (rates["cacheHitRatioPct"] / 100.0)))
-                    gross_usd = (
-                        (in_tok - cached_tok) * rates["input"]
-                        + cached_tok * rates["cache_read_input"]
-                        + out_tok * rates["output"]
-                    ) / 1_000_000.0
+                    cached_tok, gross_usd, _sav = gemini_api_token_price(model_lbl, in_tok, out_tok)
                 entries.append({
                     "cred_id": cred_id, "short_m": short_m, "loc": loc, "end_t": end_t,
                     "calls": int(round(calls * m_share)),
@@ -879,9 +893,9 @@ def _process_gemini_api_payload_bytes(
         if calls <= 0 and req_b <= 0 and resp_b <= 0:
             continue
         if req_b > 0 or resp_b > 0:
-            # Neutral estimate: ~4 bytes per token on both request and response, no cache share,
-            # list rates of the default model (no fixed multipliers).
-            rates = get_gemini_api_rates("gemini-2.5-flash")
+            # Neutral estimate: ~4 bytes per token on both request and response, rates and implicit cache
+            # share of the default model (no fixed multipliers). On streams the response bytes include the
+            # SSE/JSON framing of every chunk, so the output estimate is an upper bound.
             in_tok = int(round(req_b / 4.0))
             if "stream" in short_m.lower():
                 out_tok = int(round(resp_b / 4.0)) if resp_b > 0 else int(calls * GEMINI_API_EST_OUTPUT_TOKENS_PER_CALL)
@@ -889,16 +903,12 @@ def _process_gemini_api_payload_bytes(
             else:
                 out_tok = int(round(resp_b / 4.0))
                 gm_id = "gemini-2.5-flash / pro — GenerateContent (AI Studio API Key)"
-            cached_tok = 0
-            gross_usd = (in_tok * rates["input"] + out_tok * rates["output"]) / 1_000_000.0
-            cache_sav_usd = gross_usd * gemini_credit_ratio
+            cached_tok, gross_usd, cache_sav_usd = gemini_api_token_price(GEMINI_API_FALLBACK_MODEL, in_tok, out_tok)
             cost_src = "GEMINI_API_PAYLOAD_BYTES"
         else:
             in_tok = calls * GEMINI_API_EST_INPUT_TOKENS_PER_CALL
             out_tok = calls * GEMINI_API_EST_OUTPUT_TOKENS_PER_CALL
-            cached_tok = 0
-            gross_usd = calls * GEMINI_API_EST_COST_PER_OK_CALL
-            cache_sav_usd = 0.0
+            cached_tok, gross_usd, cache_sav_usd = gemini_api_token_price(GEMINI_API_FALLBACK_MODEL, in_tok, out_tok)
             gm_id = "gemini-2.5-flash (AI Studio API Key)"
             cost_src = "AI_STUDIO_ESTIMATE"
         entries.append({

@@ -283,6 +283,7 @@ Bandit reports one known false positive (`B105` in `backend/auth_gcp.py`: an err
 ## Known limitations
 
 - **Costs are estimates**, derived from Cloud Monitoring token metrics and a rate catalog. They are not your invoice; no reconciliation with the Cloud Billing export is implemented yet.
+- **Gemini API without token metrics**: when Cloud Monitoring has no token counts for a day, tokens are estimated from request/response bytes (about 4 bytes per token). On streaming calls the response bytes include the framing of every chunk, so that output estimate is an upper bound.
 - **Only AI costs are estimated**: infrastructure that hosts AI workloads (Cloud SQL, Redis, Compute, Cloud Run, storage…) is not included. Managed AI services are priced per call with fixed unit prices, and Gemini Enterprise seat licences are not counted.
 - **Some usage cannot be attributed to a person**: for example calls made through a shared OAuth client appear as `oauth-workload:<id>` until Data Access Audit Logs are enabled for `aiplatform.googleapis.com`. See [docs/attribution-and-limits.md](docs/attribution-and-limits.md).
 - **Default rates are not verified**: the built-in table `MODEL_PRICING_PER_1M` is a fallback; run the Pricing & Rates sync and calibrate against your billing data.

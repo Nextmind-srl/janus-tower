@@ -164,10 +164,6 @@ MODEL_PRICING_PER_1M = {
 # Standard estimation profile for direct AI Studio / Gemini API (generativelanguage.googleapis.com)
 GEMINI_API_EST_INPUT_TOKENS_PER_CALL = 2800
 GEMINI_API_EST_OUTPUT_TOKENS_PER_CALL = 700
-GEMINI_API_EST_COST_PER_OK_CALL = (
-    (GEMINI_API_EST_INPUT_TOKENS_PER_CALL / 1_000_000.0) * MODEL_PRICING_PER_1M["gemini-2.5-flash"]["input"] +
-    (GEMINI_API_EST_OUTPUT_TOKENS_PER_CALL / 1_000_000.0) * MODEL_PRICING_PER_1M["gemini-2.5-flash"]["output"]
-)
 
 # Core AI / Vertex / Gemini Enterprise Agent Platform / Model Armor APIs catalog
 AI_SERVICES_CATALOG = {

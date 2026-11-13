@@ -262,7 +262,10 @@
     "btn-demo-enter",
     "login-demo-invite",
     "login-google-wrap",
-    "login-oauth-help"
+    "login-oauth-help",
+    "pricing-stale-banner",
+    "pricing-stale-banner-text",
+    "btn-pricing-stale-scan"
   ],
   "required_ids": [
     "jt-filterbar",
@@ -456,7 +459,9 @@
     "demo-banner",
     "login-demo-invite",
     "login-google-wrap",
-    "login-oauth-help"
+    "login-oauth-help",
+    "pricing-stale-banner",
+    "btn-pricing-stale-scan"
   ],
   "inline_handlers": [
     "applyBulkSyncAction",

@@ -100,7 +100,7 @@ More detail: [Pricing & Rates](docs/pricing-and-rates.md), [Cost calibration](do
 
 **JanusTower is a local, single-user tool.** It listens on `127.0.0.1` by default. Do not expose it on a network or share one instance between several people: it is not designed as a multi-tenant web service.
 
-- **Read-only towards Google Cloud.** Scans only use `GET` calls and read-only query calls (`testIamPermissions`, `timeSeries`, `entries:list`, Cloud Billing `services/.../skus`, …). Budgets and pricing overrides are saved locally and never pushed to Google Cloud.
+- **Read-only towards Google Cloud.** Scans only use `GET` calls and read-only query calls (`testIamPermissions`, `timeSeries`, `entries:list`, Cloud Billing `services/.../skus`, …). Budgets and pricing overrides are saved locally and never pushed to Google Cloud. The one exception is the optional **BigQuery cost calibration**: it runs a `SELECT` query job on your Cloud Billing export (no data is written to Google Cloud), and Google may bill the job (usually a few cents). It runs only when you click *Detect & Calibrate from BigQuery* in Pricing & Rates, or on every scan/sync (at most once a day) if you turn on the automatic option, which is **off by default**. The Billing CSV upload needs no Google call at all.
 - **Daily login.** A Google login is valid until local midnight and only in the browser that performed it.
 - **Host and Origin checks.** Requests are accepted only for `localhost`, `127.0.0.1`, `[::1]` and the hosts you list in `LOOPBACK_HOST`, `PUBLIC_BASE_URL` or `ALLOWED_HOSTS` (comma-separated); `POST` requests and `GET /api/scan` also refuse a foreign `Origin`. If you reach the app through a reverse proxy or another host name, add it to `ALLOWED_HOSTS`, otherwise you will get HTTP 403.
 - **Content-Security-Policy.** The page is served with a CSP that lets the browser run only the app's own inline script (authorised by its SHA-256, no `'unsafe-inline'`) and the two pinned CDN libraries (Tailwind, Chart.js, both with SRI); `'unsafe-eval'` is not allowed, so injected scripts and `on*` handlers are refused even if a value were ever left unescaped. Styles still allow `'unsafe-inline'` (the Tailwind CDN injects `<style>` at runtime). If you add a new external resource, set `CSP_REPORT_ONLY=1` to see what the policy would block without breaking the page.
@@ -295,7 +295,8 @@ Bandit reports one known false positive (`B105` in `backend/auth_gcp.py`: an err
 
 ## 🗺️ Roadmap
 
-- [ ] **Exact cost reconciliation**: BigQuery Cloud Billing export and invoice CSV import, next to the current estimates.
+- [x] **Cost calibration** from the BigQuery Cloud Billing export or a Billing CSV report (see [Cost calibration](docs/cost-calibration.md)).
+- [ ] **Exact cost reconciliation**: invoice line by line next to the estimates.
 - [ ] **Live MCP inspector**: JSON-RPC `initialize` / `tools/list` against discovered MCP servers, with strict host allow-listing.
 - [ ] **Sessions**: server-side browser session and PKCE; session id no longer exposed to JavaScript.
 - [ ] **AWS Bedrock & SageMaker**, **Azure OpenAI & AI Foundry**, direct SaaS LLM providers, OpenTelemetry `gen_ai.*` ingestion.

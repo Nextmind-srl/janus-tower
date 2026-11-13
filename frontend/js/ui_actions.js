@@ -8,21 +8,22 @@
     // non fa nulla (e lascia un errore in console). Il sanitizzatore toglie ogni attributo on*.
     // ---------------------------------------------------------------------------
     const JT_ALLOWED_ACTIONS = new Set([
-      'applyBulkSyncAction', 'applyCustomDateFilter', 'clearFilterbarChip', 'closeGeminiInspectorModal',
-      'closeJtMenus', 'closeLoginScreen', 'enterDemo', 'closeMobileSidebar', 'closePricingModelDrawer', 'closeProjectModal',
-      'closeUserModal', 'dashboardFilterByKeyword', 'enterWithSavedAccount', 'filterAgentspaceDataStores',
-      'filterGeCustomAgents', 'filterGeminiConnectorHubs', 'forceScanSingleProject', 'jumpToSecurityRemediation',
-      'loadModelsPricingData', 'logoutThisBrowser', 'onCredTypeFilterChanged', 'onFiltersChanged',
-      'onModelFilterChanged', 'onPeriodDaysChanged', 'onPricingRatesFilterChanged', 'onProjectFilterChanged',
-      'onSpecificCredChanged', 'onVisibilityTogglesChanged', 'openGeminiInspectorModal', 'openLoginScreen',
-      'openPricingBillingSettings', 'openPricingModelDrawer', 'openProjectModal', 'openUserModal',
+      'applyBulkSyncAction', 'applyCustomDateFilter', 'calibratePricingFromBigQuery', 'clearFilterbarChip',
+      'closeGeminiInspectorModal', 'closeJtMenus', 'closeLoginScreen', 'enterDemo', 'closeMobileSidebar',
+      'closePricingModelDrawer', 'closeProjectModal', 'closeUserModal', 'dashboardFilterByKeyword',
+      'enterWithSavedAccount', 'filterAgentspaceDataStores', 'filterGeCustomAgents', 'filterGeminiConnectorHubs',
+      'forceScanSingleProject', 'jumpToBillingCalibrationSettings', 'jumpToSecurityRemediation',
+      'loadModelsPricingData', 'logoutThisBrowser', 'onBillingCsvFileSelected', 'onCredTypeFilterChanged',
+      'onFiltersChanged', 'onModelFilterChanged', 'onPeriodDaysChanged', 'onPricingRatesFilterChanged',
+      'onProjectFilterChanged', 'onSpecificCredChanged', 'onVisibilityTogglesChanged', 'openGeminiInspectorModal',
+      'openLoginScreen', 'openPricingBillingSettings', 'openPricingModelDrawer', 'openProjectModal', 'openUserModal',
       'purgeLocalData', 'renderCurrentTab', 'resetAllFilters', 'resetPricingBillingSettingsToDefaults',
       'resetPricingModelManualOverride', 'runScan', 'savePricingBillingSettings', 'savePricingModelGeminiCache',
       'savePricingModelManualOverride', 'selectHeaderPeriodFilter', 'selectHeaderProjectFilter',
       'selectSingleCredentialFilter', 'selectSingleModelFilter', 'selectSingleProjectFilter',
       'setSecuritySeverityFilter', 'setSyncFilterMode', 'switchGeminiEnterpriseSubView', 'switchGoogleAccount',
       'switchSubTab', 'switchTab', 'toggleChartsSection', 'toggleMobileSidebar', 'toggleProjectSyncState',
-      'toggleSidebarCollapse', 'triggerGoogleLogin', 'triggerModelsPricingCloudSync',
+      'toggleSidebarCollapse', 'triggerBillingCsvUpload', 'triggerGoogleLogin', 'triggerModelsPricingCloudSync',
       // Azioni di supporto definite qui sotto (sostituiscono i gestori inline composti)
       'hideElementById', 'toggleHiddenById', 'switchTabOnKey', 'onBackdrop'
     ]);

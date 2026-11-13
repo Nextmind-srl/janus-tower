@@ -16,7 +16,7 @@ To get per-person attribution, ask the project Owner to enable Data Access Audit
 
 ## Costs are estimates
 
-Costs are not the invoice. They are token metrics times a rate table, with optional discount and cache-hit settings. Google does not report cached tokens in these metrics, and negotiated prices, credits and taxes are only reflected if you set them. No reconciliation with the BigQuery billing export is implemented yet. See [Cost calibration](cost-calibration.md).
+Costs are not the invoice. They are token metrics times a rate table, with optional discount and cache-hit settings. Google does not report cached tokens in these metrics, and negotiated prices, credits and taxes are only reflected if you set them. Discounts and cache ratios can be calibrated on your invoice from the BigQuery billing export or a Billing CSV report, but there is no line-by-line reconciliation with the invoice. See [Cost calibration](cost-calibration.md).
 
 ## Other limits
 

@@ -407,6 +407,16 @@ def evaluate_project_ai_security_posture(p: dict) -> dict:
     }
 
 
+def is_payload_pricing_stale(payload: dict) -> bool:
+    """True when a non-demo scan payload contains at least one project without `pricingAtoms`."""
+    if not isinstance(payload, dict) or is_demo_mode() or bool(payload.get("demo")):
+        return False
+    projects = payload.get("projects")
+    if not isinstance(projects, list) or len(projects) == 0:
+        return False
+    return any(not isinstance(p.get("pricingAtoms"), dict) for p in projects if isinstance(p, dict))
+
+
 def enrich_scan_payload_security(payload: dict) -> dict:
     """
     Enriches every project in payload['projects'] and populates global summaries:
@@ -1249,6 +1259,11 @@ def enrich_scan_payload_security(payload: dict) -> dict:
         "startDate": start_d,
         "endDate": end_d
     }
+
+    if is_payload_pricing_stale(payload):
+        payload["pricingStale"] = True
+    else:
+        payload.pop("pricingStale", None)
 
     return payload
 

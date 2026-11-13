@@ -4,6 +4,8 @@
     window._jtModelsPricingState = {
       loading: false,
       syncing: false,
+      calibratingBq: false,
+      uploadingCsv: false,
       error: null,
       needsLogin: false,
       config: null,
@@ -212,6 +214,9 @@
         st.syncInProgress = Boolean(data.syncInProgress || (data.auth && data.auth.syncInProgress));
         st.lastLoadedAt = Date.now();
         st.loading = false;
+        if (typeof updateHeaderBillingWarningUi === 'function') {
+          updateHeaderBillingWarningUi((st.config && st.config.billingCalibration) || null);
+        }
         _updatePricingSidebarBadge();
         _renderPricingViewContents();
       } catch (err) {
@@ -221,6 +226,16 @@
       }
     }
     window.loadModelsPricingData = loadModelsPricingData;
+
+    async function _reloadCachedScanAfterReprice() {
+      if (typeof runScan === 'function' && globalScanData && !isLiveScanPolling) {
+        try {
+          await runScan(true, 'smart');
+        } catch (_e) {
+          // Ignore transient reload error; settings are already saved
+        }
+      }
+    }
 
     async function triggerModelsPricingCloudSync() {
       const st = window._jtModelsPricingState;
@@ -257,6 +272,10 @@
         st.syncInProgress = false;
         st.syncing = false;
         st.lastLoadedAt = Date.now();
+        if (typeof updateHeaderBillingWarningUi === 'function') {
+          updateHeaderBillingWarningUi((st.config && st.config.billingCalibration) || null);
+        }
+        await _reloadCachedScanAfterReprice();
         _updatePricingSidebarBadge();
         _renderPricingViewContents();
       } catch (err) {
@@ -552,6 +571,15 @@
         : '';
 
       const bSettings = cfg.billingSettings || {};
+      const bCal = cfg.billingCalibration || {};
+      const calSrc = String(bCal.activeSource || 'DEFAULT_LIST_PRICES').toUpperCase();
+      const calBadgeMap = {
+        BIGQUERY_EXPORT: ['green', 'Source: BigQuery Export'],
+        CSV_UPLOAD: ['blue', 'Source: CSV Upload'],
+        MANUAL: ['purple', 'Source: Manual'],
+        DEFAULT_LIST_PRICES: ['amber', 'Source: Public List Prices']
+      };
+      const [calTone, calText] = calBadgeMap[calSrc] || calBadgeMap.DEFAULT_LIST_PRICES;
       const vDisc = Number(bSettings.vertexBillingCreditDiscountPct ?? bSettings.vertexCreditDiscountPct ?? 0);
       const gDisc = Number(bSettings.geminiApiBillingCreditDiscountPct ?? bSettings.geminiApiCreditDiscountPct ?? 0);
       const iCache = Number(bSettings.vertexImplicitCacheHitRatioPct ?? bSettings.implicitCacheHitPct ?? 93);
@@ -562,6 +590,7 @@
           <div class="space-y-1">
             <div class="flex flex-wrap items-center gap-2 text-xs">
               ${toneBadge(bannerTone, headline)}
+              ${toneBadge(calTone, calText)}
               <span class="text-slate-600">${escapeHtml(detailText)}</span>
             </div>
             <div class="text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -756,6 +785,212 @@
       }).join(''));
     }
 
+    function _buildCalibrationPanelHtml(cfg, st) {
+      const cal = (cfg && cfg.billingCalibration) || {};
+      const activeSrc = String(cal.activeSource || 'DEFAULT_LIST_PRICES').toUpperCase();
+      const bqStatus = String(cal.bigqueryStatus || 'NOT_CHECKED').toUpperCase();
+      const isCalibratingBq = Boolean(st && st.calibratingBq);
+      const isUploadingCsv = Boolean(st && st.uploadingCsv);
+      const isDemo = Boolean(typeof jtAuthFlags !== 'undefined' && jtAuthFlags && jtAuthFlags.demo);
+
+      const srcInfoMap = {
+        BIGQUERY_EXPORT: {
+          tone: 'green',
+          badge: 'Active: BigQuery Export (Auto API)',
+          desc: 'Discount and cache hit ratios are calibrated automatically from your read-only Google Cloud Billing Export in BigQuery.'
+        },
+        CSV_UPLOAD: {
+          tone: 'blue',
+          badge: 'Active: Uploaded Billing CSV',
+          desc: 'Discount and cache hit ratios were computed locally in memory from your uploaded Google Cloud Billing CSV report.'
+        },
+        MANUAL: {
+          tone: 'purple',
+          badge: 'Active: Manual Parameters',
+          desc: 'Custom parameters saved manually below. Automatic scans will preserve your manual values until you reset or run calibration.'
+        },
+        DEFAULT_LIST_PRICES: {
+          tone: 'amber',
+          badge: 'Active: Public List Prices (Uncalibrated)',
+          desc: 'Using neutral public list rates (0% negotiated discount). Connect BigQuery Billing Export or upload a Billing CSV to match your invoice.'
+        }
+      };
+      const srcInfo = srcInfoMap[activeSrc] || srcInfoMap.DEFAULT_LIST_PRICES;
+
+      const bqBadgeMap = {
+        OK: ['green', 'BigQuery: Connected'],
+        PERMISSION_DENIED: ['red', 'BigQuery: Permission Denied (403)'],
+        NOT_FOUND: ['amber', 'BigQuery: Export Not Found'],
+        ERROR: ['red', 'BigQuery: Query Error'],
+        NOT_CHECKED: ['gray', 'BigQuery: Not Checked']
+      };
+      const [bqTone, bqBadgeTxt] = bqBadgeMap[bqStatus] || bqBadgeMap.NOT_CHECKED;
+
+      const calibratedAge = cal.calibratedAt ? _formatPricingRelativeAge(cal.calibratedAt).formattedDate : null;
+      const checkedAge = cal.bigqueryCheckedAt ? _formatPricingRelativeAge(cal.bigqueryCheckedAt).ageLabel : null;
+      const deniedTargets = Array.isArray(cal.deniedTargets) ? cal.deniedTargets : [];
+      const csvFiles = Array.isArray(cal.csvFiles) ? cal.csvFiles : [];
+      const notes = Array.isArray(cal.notes) ? cal.notes : [];
+      const perModelCnt = Number(cal.perModelGeminiCacheCount || 0);
+
+      let bqDetailBox = '';
+      if (bqStatus === 'OK') {
+        bqDetailBox = `
+          <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-950 space-y-1">
+            <div class="font-bold">Read-only BigQuery Billing Export active</div>
+            <p class="text-emerald-900">${escapeHtml(cal.bigqueryMessage || 'Connected to BigQuery Cloud Billing Export.')}</p>
+            ${cal.discoveredTable ? `<div class="mono text-xs text-emerald-800 break-all">Table: <b>${escapeHtml(cal.discoveredTable)}</b>${cal.jobProject ? ` · Job project: <b>${escapeHtml(cal.jobProject)}</b>` : ''}</div>` : ''}
+          </div>
+        `;
+      } else if (bqStatus === 'PERMISSION_DENIED') {
+        bqDetailBox = `
+          <div class="rounded-lg bg-rose-50 border border-rose-200 p-3 text-xs text-rose-950 space-y-1.5">
+            <div class="font-bold">Missing IAM permission to query BigQuery Billing Export (HTTP 403)</div>
+            <p class="text-rose-900">${escapeHtml(cal.bigqueryMessage || 'Your Google account cannot read the billing export dataset or run a BigQuery query job.')}</p>
+            ${deniedTargets.length ? `<div class="mono text-xs text-rose-800 break-all">Denied on: ${escapeHtml(deniedTargets.join(', '))}</div>` : ''}
+            <div class="text-xs text-rose-900 pt-0.5">
+              Required read-only IAM roles: <code class="mono font-bold">roles/bigquery.dataViewer</code> on the billing export dataset and <code class="mono font-bold">roles/bigquery.jobUser</code> on at least one accessible GCP project.
+            </div>
+          </div>
+        `;
+      } else if (bqStatus === 'NOT_FOUND') {
+        bqDetailBox = `
+          <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-950 space-y-1.5">
+            <div class="font-bold">BigQuery Cloud Billing Export table not found</div>
+            <p class="text-amber-900">${escapeHtml(cal.bigqueryMessage || 'No gcp_billing_export_v1_* table was found in your accessible projects.')}</p>
+            <div class="text-xs text-amber-900 space-y-0.5 pt-0.5">
+              <div><b>How to enable automatic API calibration:</b></div>
+              <div>1. Open <b>Google Cloud Console &gt; Billing &gt; Billing export</b>.</div>
+              <div>2. Under <b>BigQuery export</b>, enable <b>Standard usage cost</b> into a dataset.</div>
+              <div>3. If the export lives in an unlisted billing project, paste <code class="mono">project.dataset.table</code> below, or upload a CSV report on the right.</div>
+            </div>
+          </div>
+        `;
+      } else {
+        bqDetailBox = `
+          <div class="rounded-lg bg-slate-100 border border-slate-200 p-3 text-xs text-slate-700 space-y-1">
+            <div class="font-bold text-slate-800">${bqStatus === 'ERROR' ? 'BigQuery check returned an error' : 'BigQuery export not checked yet'}</div>
+            <p>${escapeHtml(cal.bigqueryMessage || 'Click Detect & Calibrate from BigQuery to scan your accessible projects for Cloud Billing Export tables.')}</p>
+          </div>
+        `;
+      }
+
+      return `
+        <div id="pricing-calibration-panel" class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3.5">
+          <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-3">
+            <div class="space-y-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <h4 class="text-xs font-extrabold uppercase tracking-wider text-[#0F2A4A]">Cost Calibration Source (3 Paths)</h4>
+                ${toneBadge(srcInfo.tone, srcInfo.badge)}
+                ${toneBadge(bqTone, bqBadgeTxt)}
+              </div>
+              <p class="text-xs text-slate-600">${escapeHtml(srcInfo.desc)}</p>
+            </div>
+            <div class="text-right text-xs text-slate-500 mono space-y-0.5">
+              ${calibratedAge ? `<div>Calibrated: <b>${escapeHtml(calibratedAge)}</b></div>` : '<div>Calibrated: <b>Never</b></div>'}
+              ${checkedAge ? `<div>BigQuery checked: ${escapeHtml(checkedAge)}</div>` : ''}
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <!-- Path 1: BigQuery Export -->
+            <div class="rounded-xl bg-white border border-slate-200 p-3.5 flex flex-col justify-between gap-3">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-extrabold text-[#0F2A4A]">1. BigQuery Billing Export</span>
+                  <span class="text-xs font-bold text-emerald-700">Recommended · Auto API</span>
+                </div>
+                ${bqDetailBox}
+              </div>
+              <div class="space-y-2 pt-1">
+                <div>
+                  <label for="pricing-bq-table-override" class="block text-xs font-bold text-slate-600 mb-1">
+                    Optional table override (<code class="mono">project.dataset.table</code>)
+                  </label>
+                  <input
+                    type="text"
+                    id="pricing-bq-table-override"
+                    value="${escapeHtml(cal.billingExportTable || '')}"
+                    placeholder="Auto-discover across accessible projects"
+                    aria-label="Optional BigQuery billing export table reference"
+                    class="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs mono text-slate-800"
+                  />
+                </div>
+                <label class="flex items-start gap-2 text-xs text-slate-700 cursor-pointer" for="pricing-bq-auto-sync">
+                  <input type="checkbox" id="pricing-bq-auto-sync" class="mt-0.5" ${cal.bigqueryAutoSync ? 'checked' : ''} ${isDemo ? 'disabled' : ''} aria-label="Run the BigQuery calibration automatically during scans and syncs" />
+                  <span>Also run it automatically during scans and syncs (at most once a day). <strong>Off by default:</strong> every run is a BigQuery query job that Google may bill you for (usually a few cents, since only the last 30 days are read). Save settings to apply.</span>
+                </label>
+                <button
+                  type="button"
+                  id="btn-pricing-calibrate-bq"
+                  data-jt-click="calibratePricingFromBigQuery()"
+                  ${(isCalibratingBq || isDemo) ? 'disabled' : ''}
+                  title="${isDemo ? 'Disabled in offline demo mode' : 'Discover and query BigQuery Cloud Billing Export (read-only)'}"
+                  class="w-full jt-btn jt-btn--primary px-3 py-1.5 rounded-lg disabled:opacity-60 disabled:cursor-not-allowed text-xs font-extrabold cursor-pointer transition inline-flex items-center justify-center gap-1.5"
+                >
+                  <svg class="jt-ico ${isCalibratingBq ? 'animate-spin' : ''}" aria-hidden="true"><use href="#ico-refresh"/></svg>
+                  <span>${isCalibratingBq ? 'Querying BigQuery…' : 'Detect & Calibrate from BigQuery'}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Path 2: CSV Upload -->
+            <div class="rounded-xl bg-white border border-slate-200 p-3.5 flex flex-col justify-between gap-3">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-extrabold text-[#0F2A4A]">2. Billing CSV Report Upload</span>
+                  <span class="text-xs font-bold text-sky-700">No BigQuery Needed</span>
+                </div>
+                <p class="text-xs text-slate-600">
+                  Export a table report from <b>Google Cloud Billing &gt; Reports</b> grouped by <b>SKU</b> (CSV format, English or Italian locale). Parsed in memory to compute exact negotiated discounts and per-model Gemini API cache hit ratios; raw CSV files are never written to disk.
+                </p>
+                ${csvFiles.length > 0 ? `
+                  <div class="rounded-lg bg-sky-50 border border-sky-200 px-2.5 py-2 text-xs text-sky-900 space-y-0.5">
+                    <div class="font-bold">Last CSV calibration (${escapeHtml(csvFiles.length)} file${csvFiles.length === 1 ? '' : 's'}):</div>
+                    <div class="mono truncate" title="${escapeHtml(csvFiles.join(', '))}">${escapeHtml(csvFiles.join(', '))}</div>
+                    ${perModelCnt > 0 ? `<div>Per-model Gemini API cache ratios set: <b>${escapeHtml(perModelCnt)}</b></div>` : ''}
+                  </div>
+                ` : ''}
+              </div>
+              <div class="pt-1">
+                <button
+                  type="button"
+                  id="btn-pricing-upload-csv"
+                  data-jt-click="triggerBillingCsvUpload()"
+                  ${isUploadingCsv ? 'disabled' : ''}
+                  class="w-full jt-btn-secondary px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-[#0F2A4A] border border-slate-300 disabled:opacity-60 disabled:cursor-not-allowed text-xs font-extrabold cursor-pointer transition inline-flex items-center justify-center gap-1.5"
+                >
+                  <span>${isUploadingCsv ? 'Calibrating from CSV…' : 'Upload Billing CSV Report…'}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Path 3: Manual / Defaults -->
+            <div class="rounded-xl bg-white border border-slate-200 p-3.5 flex flex-col justify-between gap-3">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-extrabold text-[#0F2A4A]">3. Manual Parameters &amp; List Rates</span>
+                  <span class="text-xs font-bold text-slate-500">Fallback / Custom</span>
+                </div>
+                <p class="text-xs text-slate-600">
+                  Edit the fields below and click <b>Save settings</b> to apply custom contract discounts or cache ratios. Manual edits lock automatic BigQuery overwrites until you click <b>Reset to defaults</b> or explicitly run BigQuery / CSV calibration.
+                </p>
+                ${notes.length > 0 ? `
+                  <div class="rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-2 text-xs text-slate-600 space-y-0.5">
+                    <div class="font-bold text-slate-700">Calibration notes:</div>
+                    ${notes.slice(0, 3).map(n => `<div>• ${escapeHtml(n)}</div>`).join('')}
+                  </div>
+                ` : ''}
+              </div>
+              <div class="text-xs text-slate-500 mono pt-1">
+                Auto-overwrite lock: <b>${cal.manualOverride ? 'ON (Manual override active)' : 'OFF (Auto-sync allowed)'}</b>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     function _renderPricingBillingSettingsBox() {
       const box = document.getElementById('pricing-billing-settings-box');
       if (!box) return;
@@ -809,6 +1044,8 @@
         </div>
 
         <div id="pricing-settings-feedback" class="hidden rounded-lg px-3.5 py-2 text-xs font-semibold"></div>
+
+        ${_buildCalibrationPanelHtml(cfg, st)}
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2">
@@ -870,7 +1107,7 @@
                   Implicit cache hit (%)
                 </label>
                 <p class="text-xs text-slate-600 mt-0.5">
-                  0% = only explicit cached tokens reported by Cloud Monitoring receive cached-read pricing. Set &gt; 0% (up to 98%) only to model synthetic implicit caching when uncached.
+                  Share of Vertex AI input tokens billed at the cached-input rate (default 93%, up to 98%). Cloud Monitoring does not report implicit cache hits, so calibrate it on your invoice; 0% bills every input token at the full rate.
                 </p>
               </div>
               <div class="flex items-center gap-1.5 shrink-0">
@@ -1015,13 +1252,14 @@
       fb.textContent = msg;
     }
 
-    async function _submitBillingSettingsPayload(billingSettings) {
+    async function _submitBillingSettingsPayload(billingSettings, extraPayload = {}) {
       try {
+        const bodyObj = Object.assign({ billingSettings }, extraPayload || {});
         const resp = await fetch('/api/models-pricing/config', {
           signal: AbortSignal.timeout(30000),
           method: 'POST',
           headers: getBrowserAuthHeaders({ 'Content-Type': 'application/json' }),
-          body: JSON.stringify({ billingSettings })
+          body: JSON.stringify(bodyObj)
         });
         const data = await resp.json();
         const isOk = resp.ok && (data.success === true || data.status === 'ok');
@@ -1036,8 +1274,17 @@
           st.observedModels = data.observedModels;
         }
         st.lastLoadedAt = Date.now();
+        if (typeof updateHeaderBillingWarningUi === 'function') {
+          updateHeaderBillingWarningUi((st.config && st.config.billingCalibration) || null);
+        }
+        await _reloadCachedScanAfterReprice();
         _renderPricingViewContents();
-        _showPricingSettingsFeedback('ok', 'Billing settings saved and applied to cost calculations.');
+        _showPricingSettingsFeedback(
+          'ok',
+          extraPayload && extraPayload.resetBillingSettings
+            ? 'Billing settings reset to neutral defaults and cached costs recalculated.'
+            : 'Billing settings saved and applied to cost calculations.'
+        );
       } catch (err) {
         _showPricingSettingsFeedback('err', err && err.message ? err.message : 'Failed to save billing settings.');
       }
@@ -1052,6 +1299,7 @@
       const eAutoEl = document.getElementById('pricing-cfg-usd-eur-auto');
       const gcEl = document.getElementById('pricing-cfg-gemini-cache');
       const msEl = document.getElementById('pricing-cfg-managed-savings');
+      const bqTblEl = document.getElementById('pricing-bq-table-override');
 
       const eVal = Number(eEl ? eEl.value : 0.92);
       const gcVal = Number(gcEl ? gcEl.value : 0);
@@ -1092,6 +1340,15 @@
         return;
       }
 
+      const extra = {};
+      if (bqTblEl) {
+        extra.billingExportTable = String(bqTblEl.value || '').trim();
+      }
+      const bqAutoEl = document.getElementById('pricing-bq-auto-sync');
+      if (bqAutoEl && !bqAutoEl.disabled) {
+        extra.bigqueryAutoSync = !!bqAutoEl.checked;
+      }
+
       await _submitBillingSettingsPayload({
         vertexBillingCreditDiscountPct: vVal,
         geminiApiBillingCreditDiscountPct: gVal,
@@ -1101,7 +1358,7 @@
         usdToEurRateAuto: eAutoEl ? !!eAutoEl.checked : true,
         geminiApiImplicitCacheHitRatioPct: gcVal,
         managedServiceSavingsPct: msVal
-      });
+      }, extra);
     }
     window.savePricingBillingSettings = savePricingBillingSettings;
 
@@ -1115,9 +1372,136 @@
         usdToEurRateAuto: true,
         geminiApiImplicitCacheHitRatioPct: 0.0,
         managedServiceSavingsPct: 0.0
-      });
+      }, { resetBillingSettings: true });
     }
     window.resetPricingBillingSettingsToDefaults = resetPricingBillingSettingsToDefaults;
+
+    async function calibratePricingFromBigQuery() {
+      const st = window._jtModelsPricingState;
+      if (st.calibratingBq || st.syncing) return;
+      const bqInput = document.getElementById('pricing-bq-table-override');
+      const explicitTable = bqInput ? String(bqInput.value || '').trim() : '';
+
+      st.calibratingBq = true;
+      _renderPricingBillingSettingsBox();
+      try {
+        const resp = await fetch('/api/models-pricing/calibrate-bigquery', {
+          signal: AbortSignal.timeout(120000),
+          method: 'POST',
+          headers: getBrowserAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ billingExportTable: explicitTable })
+        });
+        if (resp.status === 401) {
+          st.calibratingBq = false;
+          openLoginScreen(false);
+          _renderPricingBillingSettingsBox();
+          return;
+        }
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+          throw new Error(data.error || `BigQuery calibration failed (HTTP ${resp.status})`);
+        }
+        st.config = data.config || st.config;
+        if (Array.isArray(data.observed)) {
+          st.observedModels = data.observed;
+        }
+        st.calibratingBq = false;
+        st.lastLoadedAt = Date.now();
+        if (typeof updateHeaderBillingWarningUi === 'function') {
+          updateHeaderBillingWarningUi((st.config && st.config.billingCalibration) || null);
+        }
+        if (data.applied) {
+          await _reloadCachedScanAfterReprice();
+        }
+        _renderPricingViewContents();
+        const bqSt = String(data.bigqueryStatus || '').toUpperCase();
+        if (bqSt === 'OK' && data.applied) {
+          _showPricingSettingsFeedback('ok', 'BigQuery Billing Export calibrated and applied to cached cost calculations.');
+        } else if (bqSt === 'OK') {
+          _showPricingSettingsFeedback('ok', 'BigQuery Billing Export verified (no AI spend rows in the last 30 days to change ratios).');
+        } else {
+          const calMsg = (st.config && st.config.billingCalibration && st.config.billingCalibration.bigqueryMessage)
+            || 'BigQuery Billing Export is not available. Check diagnostic details below.';
+          _showPricingSettingsFeedback('err', calMsg);
+        }
+      } catch (err) {
+        st.calibratingBq = false;
+        _renderPricingBillingSettingsBox();
+        _showPricingSettingsFeedback('err', err && err.message ? err.message : 'BigQuery calibration failed.');
+      }
+    }
+    window.calibratePricingFromBigQuery = calibratePricingFromBigQuery;
+
+    function triggerBillingCsvUpload() {
+      const inp = document.getElementById('pricing-csv-file-input');
+      if (!inp) return;
+      inp.value = '';
+      inp.click();
+    }
+    window.triggerBillingCsvUpload = triggerBillingCsvUpload;
+
+    async function onBillingCsvFileSelected(inputEl) {
+      const files = inputEl && inputEl.files ? Array.from(inputEl.files) : [];
+      if (!files.length) return;
+      const st = window._jtModelsPricingState;
+      if (st.uploadingCsv) return;
+
+      if (files.length > 12) {
+        _showPricingSettingsFeedback('err', 'Please select at most 12 CSV files per upload.');
+        inputEl.value = '';
+        return;
+      }
+
+      st.uploadingCsv = true;
+      _renderPricingBillingSettingsBox();
+      try {
+        const payloadFiles = [];
+        for (const f of files) {
+          if (f.size > 15 * 1024 * 1024) {
+            throw new Error(`File "${f.name}" exceeds the 15 MB size limit.`);
+          }
+          const content = await f.text();
+          payloadFiles.push({ name: f.name, content });
+        }
+
+        const resp = await fetch('/api/models-pricing/calibrate-csv', {
+          signal: AbortSignal.timeout(60000),
+          method: 'POST',
+          headers: getBrowserAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ files: payloadFiles })
+        });
+        if (resp.status === 401) {
+          st.uploadingCsv = false;
+          inputEl.value = '';
+          openLoginScreen(false);
+          _renderPricingBillingSettingsBox();
+          return;
+        }
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+          throw new Error(data.error || `CSV calibration failed (HTTP ${resp.status})`);
+        }
+        st.config = data.config || st.config;
+        if (Array.isArray(data.observed)) {
+          st.observedModels = data.observed;
+        }
+        st.uploadingCsv = false;
+        st.lastLoadedAt = Date.now();
+        inputEl.value = '';
+        if (typeof updateHeaderBillingWarningUi === 'function') {
+          updateHeaderBillingWarningUi((st.config && st.config.billingCalibration) || null);
+        }
+        await _reloadCachedScanAfterReprice();
+        _renderPricingViewContents();
+        _showPricingSettingsFeedback('ok', `Calibrated billing discounts and cache ratios from ${payloadFiles.length} CSV file(s). Cached costs recalculated.`);
+      } catch (err) {
+        st.uploadingCsv = false;
+        if (inputEl) inputEl.value = '';
+        _renderPricingBillingSettingsBox();
+        _showPricingSettingsFeedback('err', err && err.message ? err.message : 'Failed to calibrate from CSV report.');
+      }
+    }
+    window.onBillingCsvFileSelected = onBillingCsvFileSelected;
 
     function _renderPricingCoverageTables(statsOpt = null) {
       const unpricedTbody = document.getElementById('pricing-unpriced-tbody');
@@ -1715,6 +2099,7 @@
           st.observedModels = data.observedModels;
         }
         st.lastLoadedAt = Date.now();
+        await _reloadCachedScanAfterReprice();
         _updatePricingSidebarBadge();
         _renderPricingViewContents();
         openPricingModelDrawer(modelId);
@@ -1752,10 +2137,16 @@
         }
         const st = window._jtModelsPricingState;
         st.config = data.config || st.config;
+        if (Array.isArray(data.observed)) {
+          st.observedModels = data.observed;
+        } else if (Array.isArray(data.observedModels)) {
+          st.observedModels = data.observedModels;
+        }
         st.lastLoadedAt = Date.now();
+        await _reloadCachedScanAfterReprice();
         _renderPricingViewContents();
         openPricingModelDrawer(cleanId);
-        _showPricingDrawerFeedback('ok', value === null ? `Gemini API cache hit reset to default for ${cleanId}. Run a scan to recalculate costs.` : `Gemini API cache hit saved for ${cleanId}. Run a scan to recalculate costs.`);
+        _showPricingDrawerFeedback('ok', value === null ? `Gemini API cache hit reset to default for ${cleanId}. Cached costs recalculated.` : `Gemini API cache hit saved for ${cleanId}. Cached costs recalculated.`);
       } catch (err) {
         _showPricingDrawerFeedback('err', err && err.message ? err.message : 'Failed to save Gemini API cache hit.');
       }
@@ -1791,6 +2182,7 @@
           st.observedModels = data.observedModels;
         }
         st.lastLoadedAt = Date.now();
+        await _reloadCachedScanAfterReprice();
         _updatePricingSidebarBadge();
         _renderPricingViewContents();
         if (st.config && st.config.models && st.config.models[cleanId]) {

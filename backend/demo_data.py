@@ -1435,6 +1435,29 @@ def build_demo_models_pricing_config(reference_date: str = DEFAULT_REFERENCE_DAT
             "lastSkuIdGlobal": "", "lastSkuIdRegional": "", "updatedAt": stamp,
         }
 
+    demo_cal = {
+        "activeSource": "DEFAULT_LIST_PRICES",
+        "manualOverride": False,
+        "bigqueryAutoSync": False,
+        "bigqueryStatus": "NOT_FOUND",
+        "bigqueryCheckedAt": stamp,
+        "billingExportTable": "",
+        "discoveredTable": "",
+        "jobProject": "",
+        "deniedTargets": [],
+        "bigqueryMessage": (
+            "Demo mode runs offline without Google Cloud API access. "
+            "You can upload a sample Cloud Billing CSV report or adjust billing parameters locally in this temporary demo session."
+        ),
+        "calibratedAt": None,
+        "csvFiles": [],
+        "windowDays": 30,
+        "rowCount": 0,
+        "derivedSettings": {},
+        "perModelGeminiCacheCount": 0,
+        "notes": [],
+    }
+
     if base is not None:
         cfg = json.loads(json.dumps(base))
         cfg["updatedAt"] = stamp
@@ -1443,6 +1466,7 @@ def build_demo_models_pricing_config(reference_date: str = DEFAULT_REFERENCE_DAT
                 m["updatedAt"] = stamp
         for mid, (p_in, p_out) in MODEL_PRICES.items():  # every model the demo traffic uses is priced like the demo costs
             cfg["models"][mid] = entry(mid, p_in, p_out)
+        cfg["billingCalibration"] = dict(demo_cal)
         cfg["lastApiSync"].update({"syncedAt": stamp, "skusScanned": 1240, "skusMatched": len(MODEL_PRICES), "publisherModelsDiscovered": len(cfg["models"]),
                                    "totalConfiguredModels": len(cfg["models"])})
         return cfg
@@ -1454,6 +1478,7 @@ def build_demo_models_pricing_config(reference_date: str = DEFAULT_REFERENCE_DAT
         "billingSettings": {"vertexBillingCreditDiscountPct": 0.0, "geminiApiBillingCreditDiscountPct": 0.0, "vertexImplicitCacheHitRatioPct": 93.0,
                             "regionalMultiplierDefault": 1.10, "managedServiceSavingsPct": 0.0,
                             "geminiApiImplicitCacheHitRatioPct": 0.0, "usdToEurRate": FAKE_USD_TO_EUR, "usdToEurRateAuto": True},
+        "billingCalibration": dict(demo_cal),
         "oauthClientOwners": {},
         "lastApiSync": {"syncedAt": stamp, "skusScanned": 1240, "skusMatched": len(models), "publisherModelsDiscovered": len(models),
                         "totalConfiguredModels": len(models), "partial": False, "errors": []},

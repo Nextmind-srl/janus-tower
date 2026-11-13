@@ -28,9 +28,12 @@ ignore = ["E501"]
 "backend/gemini_enterprise.py" = ["B007", "F841"]
 "backend/project_inspector.py" = ["B007", "E741"]
 "backend/security_posture.py" = ["F541"]
+# False positive: the table reference in the SQL is validated by parse_bigquery_table_ref (strict regexes).
+"backend/billing_calibration.py" = ["S608"]
 # False positive (line 129): a user-facing error message assigned to `token_error`, not a password.
 "backend/auth_gcp.py" = ["S105"]
-"tests/*.py" = ["S101"]
+# Fake tokens in the BigQuery calibration tests are not passwords.
+"tests/*.py" = ["S101", "S106"]
 
 [tool.mypy]
 python_version = "3.11"

@@ -164,6 +164,18 @@
 
     <div class="jt-header-spacer"></div>
 
+    <button
+      type="button"
+      id="header-billing-warning-btn"
+      data-jt-click="jumpToBillingCalibrationSettings()"
+      data-jt-tip="BigQuery Billing Export is not active. Click to open Billing settings and configure cost calibration."
+      aria-label="Billing calibration warning — click to open Billing settings"
+      class="hidden jt-btn jt-btn--ghost-dark border border-amber-400/50 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 cursor-pointer"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span id="header-billing-warning-label" class="jt-hide-xs text-xs font-bold">Billing setup</span>
+    </button>
+
     <div id="cache-status-pill" data-jt-click="switchTab('sync')" role="button" tabindex="0" data-jt-keydown="switchTabOnKey('sync')" class="jt-status cursor-pointer" title="Data is loaded instantaneously from local cache. Click to manage which projects to scan.">
       <span class="jt-status-main"><span class="jt-dot" id="jt-status-dot"></span><span id="cache-status-text">Ready</span></span>
       <span class="jt-status-detail jt-hide-md" id="jt-status-detail">Cache active</span>
@@ -692,6 +704,20 @@
             View New Projects
           </button>
           <button type="button" data-jt-click="hideElementById('global-new-projects-banner')" class="jt-info-banner__close cursor-pointer" title="Dismiss" aria-label="Dismiss"><svg class="jt-ico" aria-hidden="true"><use href="#ico-close"/></svg></button>
+        </div>
+      </div>
+
+      <!-- DISCREET NOTICE FOR PRE-REPRICING CACHED PAYLOADS -->
+      <div id="pricing-stale-banner" role="status" aria-live="polite" class="hidden jt-info-banner">
+        <div class="jt-info-banner__lead">
+          <span class="jt-info-banner__dot" aria-hidden="true"></span>
+          <div id="pricing-stale-banner-text">Costs were computed before instant repricing existed: run a scan once to enable it.</div>
+        </div>
+        <div class="jt-info-banner__actions">
+          <button type="button" id="btn-pricing-stale-scan" data-jt-click="runScan(false, 'smart')" class="jt-info-banner__btn cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
+            Scan
+          </button>
+          <button type="button" data-jt-click="hideElementById('pricing-stale-banner')" class="jt-info-banner__close cursor-pointer" title="Dismiss" aria-label="Dismiss"><svg class="jt-ico" aria-hidden="true"><use href="#ico-close"/></svg></button>
         </div>
       </div>
 
@@ -1314,6 +1340,7 @@
 
           <!-- Subtab 2: Billing settings -->
           <div data-subtab-panel="pricing-settings" class="hidden space-y-3">
+            <input type="file" id="pricing-csv-file-input" accept=".csv,text/csv" multiple class="hidden" data-jt-change="onBillingCsvFileSelected(this)" aria-label="Upload Google Cloud Billing CSV report" />
             <div id="pricing-billing-settings-box" class="jt-dash-card bg-white rounded-xl border border-slate-200 p-5 shadow-2xs space-y-4"></div>
           </div>
 

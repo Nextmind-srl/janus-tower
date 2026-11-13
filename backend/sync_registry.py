@@ -1,4 +1,11 @@
+import copy
+import tempfile
+
 SYNC_REGISTRY_FILE = os.path.join(DATA_DIR, "projects_sync_registry.json")
+
+
+def _empty_pricing_atoms() -> dict:
+    return {"vertex": [], "gemini": [], "managed": [], "dialogflow": []}
 
 
 def get_account_cache_path(account_email: str, days: int = 30) -> str:
@@ -948,6 +955,17 @@ def slice_cached_payload_for_days(
         if p.get("usersUsage"):
             p["usersUsage"].sort(key=lambda x: (x.get("estimatedCostUsd", 0.0), x.get("attributedTokens", 0), x.get("totalInteractions", 0)), reverse=True)
 
+        atoms_obj = p.get("pricingAtoms")
+        if isinstance(atoms_obj, dict):
+            p["pricingAtomsVersion"] = int(p.get("pricingAtomsVersion", 1) or 1)
+            p["pricingAtoms"] = {
+                atom_k: [
+                    rec for rec in (atoms_obj.get(atom_k) or [])
+                    if isinstance(rec, dict) and (not rec.get("d") or (cutoff_date <= str(rec.get("d")) <= end_date_str))
+                ]
+                for atom_k in ("vertex", "gemini", "managed", "dialogflow")
+            }
+
         # Clear pre-computed 30d telemetry dicts so enrich_scan_payload_security recomputes them for target_days
         for k_stale in ("dataResidency", "finopsExtended", "aiToolsSummary", "agentspaceTelemetry", "aiLogForensics", "aiSecurityPosture"):
             p.pop(k_stale, None)
@@ -1002,6 +1020,8 @@ def make_unscanned_project_placeholder(p_raw: dict) -> dict:
         "apiKeys": [],
         "serviceAccounts": [],
         "dailySeries": {},
+        "pricingAtomsVersion": 1,
+        "pricingAtoms": _empty_pricing_atoms(),
         "permissions": {
             "accessLevel": "SKIPPED",
             "badgeLabel": "⏸️ Excluded from Scan (No AI Data)",
@@ -1191,6 +1211,27 @@ def scan_all_projects(
                 finally:
                     MODELS_PRICING_SYNC_LOCK.release()
 
+    # Auto-detect & calibrate BigQuery Cloud Billing Export (read-only, non-blocking, respects manualOverride)
+    if "maybe_auto_calibrate_bigquery_for_account" in globals():
+        with contextlib.suppress(Exception):
+            cal_before = str(((load_models_pricing_config().get("billingCalibration") or {}).get("calibratedAt")) or "")
+            bq_q_cands = get_quota_project_candidates(active_acc, reg=reg, raw_projects=raw_projects)
+            updated_mp_cfg = maybe_auto_calibrate_bigquery_for_account(
+                token=token,
+                active_acc=active_acc,
+                raw_projects=raw_projects,
+                reg=reg,
+                quota_candidates=bq_q_cands,
+                force_check=(scan_mode == "full"),
+            )
+            cal_after = str((((updated_mp_cfg or {}).get("billingCalibration") or {}).get("calibratedAt")) or "")
+            if cal_after and cal_after != cal_before and prev_cache and prev_cache.get("projects"):
+                reprice_all_cached_payloads(active_acc)
+                prev_cache = reprice_cached_payload(prev_cache)
+                prev_projects_by_id = {
+                    cp["projectId"]: cp for cp in (prev_cache.get("projects") or []) if cp.get("projectId")
+                }
+
     # Detect new projects vs existing registry
     had_existing_registry = len(reg_projects) > 0
     newly_detected_ids = []
@@ -1217,6 +1258,14 @@ def scan_all_projects(
                 # Reuse cached project data (or placeholder) without hitting slow GCP APIs
                 cached_p = prev_projects_by_id.get(pid)
                 if cached_p:
+                    if (
+                        not isinstance(cached_p.get("pricingAtoms"), dict)
+                        and float(cached_p.get("estimatedCostUsd", 0.0) or 0.0) == 0.0
+                        and int(cached_p.get("totalTokens", 0) or 0) == 0
+                    ):
+                        cached_p = dict(cached_p)
+                        cached_p["pricingAtomsVersion"] = 1
+                        cached_p["pricingAtoms"] = _empty_pricing_atoms()
                     reused_projects.append(cached_p)
                 else:
                     reused_projects.append(make_unscanned_project_placeholder(p_raw))
@@ -1297,6 +1346,8 @@ def scan_all_projects(
                         "apiKeys": [],
                         "serviceAccounts": [],
                         "dailySeries": {},
+                        "pricingAtomsVersion": 1,
+                        "pricingAtoms": _empty_pricing_atoms(),
                         "permissions": {
                             "accessLevel": "DENIED",
                             "badgeLabel": f"❌ Scan Error: {str(e)[:40]}",
@@ -1659,5 +1710,1508 @@ def force_scan_single_project(
     )
 
     return payload
+
+
+def _reprice_extract_fallback_dates(payload: dict) -> tuple[str, str]:
+    scanned_iso = str(payload.get("scannedAt") or "").strip()[:10]
+    fb_dt = None
+    if len(scanned_iso) == 10 and scanned_iso[:4].isdigit():
+        with contextlib.suppress(ValueError):
+            fb_dt = datetime.strptime(scanned_iso, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    if fb_dt is None:
+        fb_dt = datetime.now(timezone.utc)
+    return fb_dt.strftime("%Y-%m-%d"), (fb_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def _reprice_resolve_project_dates(p: dict, fb_today: str, fb_yesterday: str) -> tuple[str, str]:
+    today_str = ""
+    yesterday_str = ""
+    for item in list(p.get("credentialsUsage") or []) + list(p.get("apiKeys") or []):
+        if isinstance(item, dict) and item.get("todayDate"):
+            today_str = str(item["todayDate"])[:10]
+            yesterday_str = str(item.get("yesterdayDate") or "")[:10]
+            break
+    if not today_str:
+        today_str = fb_today
+    if not yesterday_str:
+        try:
+            yesterday_str = (datetime.strptime(today_str, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+        except ValueError:
+            yesterday_str = fb_yesterday
+    return today_str, yesterday_str
+
+
+def _reprice_reset_project_and_collect_skeletons(p: dict) -> tuple[dict, dict]:
+    models_dict: dict[str, dict] = {}
+    for old_m in (p.get("models") or []):
+        if not isinstance(old_m, dict):
+            continue
+        m_id = str(old_m.get("modelId") or "")
+        m_svc = old_m.get("service", "aiplatform.googleapis.com") or "aiplatform.googleapis.com"
+        m_inv = int(old_m.get("invocations", 0) or 0)
+        if m_id and m_svc == "aiplatform.googleapis.com" and m_inv > 0:
+            skel = _new_model_usage_entry(m_id, service="aiplatform.googleapis.com")
+            skel["invocations"] = m_inv
+            skel["locations"] = set(old_m.get("locations") or [])
+            for d_k, d_v in (old_m.get("dailySeries") or {}).items():
+                if not isinstance(d_v, dict):
+                    continue
+                d_req = int(d_v.get("requests", 0) or 0)
+                d_inf = int(d_v.get("inferenceRequests", 0) or 0)
+                if d_req > 0 or d_inf > 0:
+                    b_new = empty_day_bucket()
+                    b_new["requests"] = d_req
+                    b_new["inferenceRequests"] = d_inf
+                    skel["dailySeries"][d_k] = b_new
+            models_dict[m_id] = skel
+
+    for z_int in (
+        "inputTokens",
+        "outputTokens",
+        "cachedTokens",
+        "thinkingTokens",
+        "totalTokens",
+        "geminiRequestBytes",
+        "geminiResponseBytes",
+    ):
+        p[z_int] = 0
+    p["geminiFreeTierDetected"] = False
+    for z_flt in (
+        "vertexGrossCostUsd",
+        "vertexCacheSavingsUsd",
+        "vertexCostUsd",
+        "geminiGrossCostUsd",
+        "geminiCacheSavingsUsd",
+        "geminiCostUsd",
+        "otherAiGrossCostUsd",
+        "otherAiCacheSavingsUsd",
+        "otherAiCostUsd",
+        "estimatedCostUsd",
+        "costUsd",
+    ):
+        p[z_flt] = 0.0
+    p.pop("grossCostUsd", None)
+    p.pop("cacheSavingsUsd", None)
+
+    p_ds = p.get("dailySeries") if isinstance(p.get("dailySeries"), dict) else {}
+    p["dailySeries"] = p_ds
+    for d_v in p_ds.values():
+        if not isinstance(d_v, dict):
+            continue
+        for req_k in (
+            "requests",
+            "inferenceRequests",
+            "vertexInferenceRequests",
+            "systemRequests",
+            "vertexRequests",
+            "geminiApiRequests",
+            "ok200",
+            "ok200Inference",
+            "errors429",
+        ):
+            d_v.setdefault(req_k, 0)
+        for tok_k in ("tokens", "inputTokens", "outputTokens", "cachedTokens", "thinkingTokens"):
+            d_v[tok_k] = 0
+        for cost_k in ("costUsd", "vertexCostUsd", "geminiCostUsd", "otherAiCostUsd"):
+            d_v[cost_k] = 0.0
+
+    creds_dict: dict[str, dict] = {}
+    for old_c in (p.get("credentialsUsage") or []):
+        if not isinstance(old_c, dict):
+            continue
+        cid = str(old_c.get("credentialId") or "")
+        if not cid:
+            continue
+        c_copy = dict(old_c)
+        c_copy["services"] = set(old_c.get("services") or [])
+        c_copy["methods"] = set(old_c.get("methods") or [])
+        c_copy["inferenceMethods"] = set(old_c.get("inferenceMethods") or [])
+        c_copy["systemMethods"] = set(old_c.get("systemMethods") or [])
+        for zc_int in ("inputTokens", "outputTokens", "cachedTokens", "totalTokens"):
+            c_copy[zc_int] = 0
+        for zb_int in ("requestBytes", "responseBytes"):
+            if zb_int in c_copy:
+                c_copy[zb_int] = 0
+        for zc_flt in ("grossCostUsd", "cacheSavingsUsd", "estimatedCostUsd"):
+            c_copy[zc_flt] = 0.0
+        c_copy["costSource"] = "NONE"
+        c_copy.pop("vertexCostUsd", None)
+        c_copy.pop("geminiCostUsd", None)
+        c_copy.pop("tokensEstimatedFromBytes", None)
+        c_copy.pop("freeTier", None)
+
+        c_ds = c_copy.get("dailySeries") if isinstance(c_copy.get("dailySeries"), dict) else {}
+        c_copy["dailySeries"] = c_ds
+        for c_day in c_ds.values():
+            if not isinstance(c_day, dict):
+                continue
+            for req_k in (
+                "requests",
+                "inferenceRequests",
+                "vertexInferenceRequests",
+                "systemRequests",
+                "vertexRequests",
+                "geminiApiRequests",
+                "ok200",
+                "ok200Inference",
+                "errors429",
+            ):
+                c_day.setdefault(req_k, 0)
+            for tok_k in ("tokens", "inputTokens", "outputTokens", "cachedTokens", "thinkingTokens"):
+                c_day[tok_k] = 0
+            for cost_k in ("costUsd", "vertexCostUsd", "geminiCostUsd", "otherAiCostUsd"):
+                c_day[cost_k] = 0.0
+            c_day.pop("tokensEstimatedFromBytes", None)
+            c_day.pop("freeTier", None)
+        creds_dict[cid] = c_copy
+
+    return models_dict, creds_dict
+
+
+def _reprice_apply_managed_atoms(p: dict, models_dict: dict, creds_dict: dict, managed_atoms: list) -> None:
+    for atom in managed_atoms:
+        if not isinstance(atom, dict):
+            continue
+        n = int(atom.get("n", 0) or 0)
+        svc = str(atom.get("svc") or "")
+        if n <= 0 or not svc:
+            continue
+        cred_id = str(atom.get("c") or "unknown")
+        meth = str(atom.get("meth") or "")
+        loc = str(atom.get("loc") or "global")
+        end_t = str(atom.get("d") or "")[:10]
+
+        est_gross, est_sav, est_in, est_out, svc_model_id, svc_cost_src = managed_call_price(svc, meth, n)
+        if not svc_model_id and est_gross <= 0 and est_in <= 0:
+            continue
+        est_tot = est_in + est_out
+        est_cache_tok = 0
+        est_cost = est_gross - est_sav
+        short_m = meth.split(".")[-1] if meth else "unknown"
+
+        c_entry = creds_dict.get(cred_id)
+        if c_entry is None:
+            c_entry = {
+                "credentialId": cred_id,
+                "service": svc,
+                "services": {svc},
+                "requests": n,
+                "inferenceRequests": n,
+                "vertexInferenceRequests": 0,
+                "systemRequests": 0,
+                "ok200": n,
+                "ok200Inference": n,
+                "errors429": 0,
+                "otherErrors": 0,
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "cachedTokens": 0,
+                "totalTokens": 0,
+                "requestBytes": 0,
+                "responseBytes": 0,
+                "grossCostUsd": 0.0,
+                "cacheSavingsUsd": 0.0,
+                "estimatedCostUsd": 0.0,
+                "costSource": "NONE",
+                "methods": {short_m} if meth else set(),
+                "inferenceMethods": {short_m} if meth else set(),
+                "systemMethods": set(),
+                "dailySeries": {},
+            }
+            creds_dict[cred_id] = c_entry
+        else:
+            c_entry["services"].add(svc)
+            if meth:
+                c_entry["methods"].add(short_m)
+                c_entry["inferenceMethods"].add(short_m)
+
+        if end_t:
+            p_day = p["dailySeries"].setdefault(end_t, empty_day_bucket())
+            c_day = c_entry["dailySeries"].setdefault(end_t, empty_day_bucket())
+            for bucket in (p_day, c_day):
+                bucket["inputTokens"] += est_in
+                bucket["outputTokens"] += est_out
+                bucket["cachedTokens"] += est_cache_tok
+                bucket["tokens"] += est_tot
+                bucket["otherAiCostUsd"] += est_cost
+                bucket["costUsd"] += est_cost
+
+        c_entry["inputTokens"] += est_in
+        c_entry["outputTokens"] += est_out
+        c_entry["cachedTokens"] += est_cache_tok
+        c_entry["totalTokens"] += est_tot
+        c_entry["grossCostUsd"] += est_gross
+        c_entry["cacheSavingsUsd"] += est_sav
+        c_entry["estimatedCostUsd"] += est_cost
+        if c_entry["costSource"] == "NONE" and svc_cost_src:
+            c_entry["costSource"] = svc_cost_src
+
+        p["inputTokens"] += est_in
+        p["outputTokens"] += est_out
+        p["cachedTokens"] += est_cache_tok
+        p["totalTokens"] += est_tot
+        p["otherAiGrossCostUsd"] += est_gross
+        p["otherAiCacheSavingsUsd"] += est_sav
+        p["otherAiCostUsd"] += est_cost
+        p["estimatedCostUsd"] += est_cost
+
+        sm_entry = models_dict.setdefault(svc_model_id, _new_model_usage_entry(svc_model_id, service=svc))
+        sm_entry["locations"].add(loc or "global")
+        sm_entry["invocations"] += n
+        sm_entry["inputTokens"] += est_in
+        sm_entry["outputTokens"] += est_out
+        sm_entry["cachedTokens"] += est_cache_tok
+        sm_entry["totalTokens"] += est_tot
+        sm_entry["grossCostUsd"] = sm_entry.get("grossCostUsd", 0.0) + est_gross
+        sm_entry["cacheSavingsUsd"] = sm_entry.get("cacheSavingsUsd", 0.0) + est_sav
+        sm_entry["costUsd"] += est_cost
+        if end_t:
+            sm_day = sm_entry["dailySeries"].setdefault(end_t, empty_day_bucket())
+            sm_day["requests"] += n
+            sm_day["inferenceRequests"] += n
+            sm_day["inputTokens"] += est_in
+            sm_day["outputTokens"] += est_out
+            sm_day["cachedTokens"] += est_cache_tok
+            sm_day["tokens"] += est_tot
+            sm_day["otherAiCostUsd"] += est_cost
+            sm_day["costUsd"] += est_cost
+
+
+def _reprice_apply_gemini_atoms(p: dict, models_dict: dict, creds_dict: dict, gemini_atoms: list) -> None:
+    for atom in gemini_atoms:
+        if not isinstance(atom, dict):
+            continue
+        cred_id = str(atom.get("c") or GEMINI_API_UNATTRIBUTED_ID)
+        m_lbl = str(atom.get("m") or GEMINI_API_FALLBACK_MODEL)
+        loc = str(atom.get("loc") or "global")
+        short_m = str(atom.get("sm") or "GenerateContent")
+        end_t = str(atom.get("d") or "")[:10]
+        in_tok = int(atom.get("i", 0) or 0)
+        out_tok = int(atom.get("o", 0) or 0)
+        calls = int(atom.get("calls", 0) or 0)
+        req_b = int(atom.get("rb", 0) or 0)
+        resp_b = int(atom.get("rsb", 0) or 0)
+        free_tier = bool(atom.get("free", False))
+        cost_src = str(atom.get("src") or ("GEMINI_API_FREE_TIER" if free_tier else "GEMINI_API_TOKEN_METRICS"))
+        gm_id = atom.get("gm")
+        if not gm_id:
+            if cost_src == "GEMINI_API_PAYLOAD_BYTES":
+                if "stream" in short_m.lower():
+                    gm_id = "gemini-2.5-pro / flash — StreamGenerateContent (Gemini API Stream)"
+                else:
+                    gm_id = "gemini-2.5-flash / pro — GenerateContent (AI Studio API Key)"
+            elif cost_src == "AI_STUDIO_ESTIMATE":
+                gm_id = "gemini-2.5-flash (AI Studio API Key)"
+            else:
+                gm_id = f"{m_lbl} (Gemini API)"
+
+        if free_tier:
+            cached_tok = 0
+            gross_usd = 0.0
+            cache_sav_usd = 0.0
+            p["geminiFreeTierDetected"] = True
+        else:
+            cached_tok, gross_usd, cache_sav_usd = gemini_api_token_price(m_lbl, in_tok, out_tok)
+
+        net_usd = gross_usd - cache_sav_usd
+        tot_tok = in_tok + out_tok
+        from_bytes = cost_src == "GEMINI_API_PAYLOAD_BYTES"
+
+        c_entry = creds_dict.setdefault(cred_id, {
+            "credentialId": cred_id,
+            "service": "generativelanguage.googleapis.com",
+            "services": {"generativelanguage.googleapis.com"},
+            "requests": calls,
+            "inferenceRequests": calls,
+            "vertexInferenceRequests": 0,
+            "systemRequests": 0,
+            "ok200": calls,
+            "ok200Inference": calls,
+            "errors429": 0,
+            "otherErrors": 0,
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "cachedTokens": 0,
+            "totalTokens": 0,
+            "requestBytes": 0,
+            "responseBytes": 0,
+            "grossCostUsd": 0.0,
+            "cacheSavingsUsd": 0.0,
+            "estimatedCostUsd": 0.0,
+            "costSource": cost_src,
+            "methods": {short_m},
+            "inferenceMethods": {short_m},
+            "systemMethods": set(),
+            "dailySeries": {},
+        })
+        if cred_id == GEMINI_API_UNATTRIBUTED_ID:
+            c_entry["resolvedName"] = GEMINI_API_UNATTRIBUTED_LABEL
+            c_entry["resolvedType"] = "API_KEY"
+
+        if from_bytes:
+            c_entry["tokensEstimatedFromBytes"] = True
+        if free_tier:
+            c_entry["freeTier"] = True
+
+        if end_t:
+            p_day = p["dailySeries"].setdefault(end_t, empty_day_bucket())
+            c_day = c_entry["dailySeries"].setdefault(end_t, empty_day_bucket())
+            if from_bytes:
+                c_day["tokensEstimatedFromBytes"] = True
+            if free_tier:
+                c_day["freeTier"] = True
+            for bucket in (p_day, c_day):
+                bucket["inputTokens"] += in_tok
+                bucket["outputTokens"] += out_tok
+                bucket["cachedTokens"] += cached_tok
+                bucket["tokens"] += tot_tok
+                bucket["geminiCostUsd"] += net_usd
+                bucket["costUsd"] += net_usd
+
+        c_entry["inputTokens"] += in_tok
+        c_entry["outputTokens"] += out_tok
+        c_entry["cachedTokens"] += cached_tok
+        c_entry["totalTokens"] += tot_tok
+        c_entry["requestBytes"] = c_entry.get("requestBytes", 0) + req_b
+        c_entry["responseBytes"] = c_entry.get("responseBytes", 0) + resp_b
+        c_entry["grossCostUsd"] += gross_usd
+        c_entry["cacheSavingsUsd"] += cache_sav_usd
+        c_entry["estimatedCostUsd"] += net_usd
+        c_entry["costSource"] = cost_src
+
+        p["inputTokens"] += in_tok
+        p["outputTokens"] += out_tok
+        p["cachedTokens"] += cached_tok
+        p["totalTokens"] += tot_tok
+        p["geminiRequestBytes"] += req_b
+        p["geminiResponseBytes"] += resp_b
+        p["geminiGrossCostUsd"] += gross_usd
+        p["geminiCacheSavingsUsd"] += cache_sav_usd
+        p["geminiCostUsd"] += net_usd
+        p["estimatedCostUsd"] += net_usd
+
+        gm_entry = models_dict.setdefault(gm_id, _new_model_usage_entry(gm_id, service="generativelanguage.googleapis.com"))
+        gm_entry["locations"].add(f"{loc} (AI Studio)" if loc and loc != "global" else "global (AI Studio)")
+        gm_entry["invocations"] += calls
+        gm_entry["inputTokens"] += in_tok
+        gm_entry["outputTokens"] += out_tok
+        gm_entry["cachedTokens"] += cached_tok
+        gm_entry["totalTokens"] += tot_tok
+        gm_entry["grossCostUsd"] = gm_entry.get("grossCostUsd", 0.0) + gross_usd
+        gm_entry["cacheSavingsUsd"] = gm_entry.get("cacheSavingsUsd", 0.0) + cache_sav_usd
+        gm_entry["costUsd"] += net_usd
+        if from_bytes:
+            gm_entry["tokensEstimatedFromBytes"] = True
+        if free_tier:
+            gm_entry["freeTier"] = True
+        if end_t:
+            gm_day = gm_entry["dailySeries"].setdefault(end_t, empty_day_bucket())
+            if from_bytes:
+                gm_day["tokensEstimatedFromBytes"] = True
+            if free_tier:
+                gm_day["freeTier"] = True
+            gm_day["requests"] += calls
+            gm_day["inferenceRequests"] += calls
+            gm_day["inputTokens"] += in_tok
+            gm_day["outputTokens"] += out_tok
+            gm_day["cachedTokens"] += cached_tok
+            gm_day["tokens"] += tot_tok
+            gm_day["geminiCostUsd"] += net_usd
+            gm_day["costUsd"] += net_usd
+
+
+def _reprice_apply_vertex_atoms(p: dict, models_dict: dict, creds_dict: dict, vertex_atoms: list) -> None:
+    dedup_pts: dict[tuple[str, str, str, str, str], int] = {}
+    for atom in vertex_atoms:
+        if not isinstance(atom, dict):
+            continue
+        val = int(atom.get("v", 0) or 0)
+        if val <= 0:
+            continue
+        model_id = str(atom.get("m") or "unknown-model")
+        location = str(atom.get("loc") or "global")
+        loc_display = str(atom.get("ld") or location)
+        tok_type = str(atom.get("t") or "input").lower()
+        end_t = str(atom.get("d") or "")[:10]
+        pt_k = (model_id, location, loc_display, tok_type, end_t)
+        dedup_pts[pt_k] = dedup_pts.get(pt_k, 0) + val
+
+    series_groups: dict[tuple[str, str, str, str], list[tuple[str, int]]] = {}
+    for (model_id, location, loc_display, tok_type, end_t), val in dedup_pts.items():
+        series_groups.setdefault((model_id, location, loc_display, tok_type), []).append((end_t, val))
+
+    vertex_daily_tokens: dict[str, dict] = {}
+    for (model_id, location, loc_display, tok_type), pts_list in series_groups.items():
+        rates = get_model_rates(model_id, location=location)
+        pts_sum = 0
+        m_entry = models_dict.setdefault(model_id, _new_model_usage_entry(model_id))
+        m_entry["locations"].add(loc_display)
+        if rates.get("isEstimated"):
+            m_entry["isEstimated"] = True
+
+        for end_t, val in pts_list:
+            if val <= 0:
+                continue
+            pts_sum += val
+            pt_gross, pt_sav, pt_cache_tok = vertex_token_price(model_id, location, tok_type, val, rates=rates)
+            pt_cost = pt_gross - pt_sav
+            if end_t:
+                p_day = p["dailySeries"].setdefault(end_t, empty_day_bucket())
+                m_day = m_entry["dailySeries"].setdefault(end_t, empty_day_bucket())
+                v_day = vertex_daily_tokens.setdefault(end_t, {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "cachedTokens": 0,
+                    "thinkingTokens": 0,
+                    "totalTokens": 0,
+                    "grossCostUsd": 0.0,
+                    "cacheSavingsUsd": 0.0,
+                    "costUsd": 0.0,
+                })
+
+                p_day["tokens"] += val
+                p_day["vertexCostUsd"] += pt_cost
+                p_day["costUsd"] += pt_cost
+                m_day["tokens"] += val
+                m_day["costUsd"] += pt_cost
+
+                v_day["totalTokens"] += val
+                v_day["grossCostUsd"] += pt_gross
+                v_day["cacheSavingsUsd"] += pt_sav
+                v_day["costUsd"] += pt_cost
+
+                for b_tok in (p_day, m_day, v_day):
+                    if "cache" in tok_type:
+                        b_tok["cachedTokens"] += val
+                    elif "output" in tok_type or "candidate" in tok_type:
+                        b_tok["outputTokens"] += val
+                    elif "think" in tok_type:
+                        b_tok["thinkingTokens"] += val
+                    else:
+                        b_tok["inputTokens"] += val
+                        b_tok["cachedTokens"] += pt_cache_tok
+
+        if pts_sum <= 0:
+            continue
+
+        gross_piece, sav_piece, est_cached_sum = vertex_token_price(model_id, location, tok_type, pts_sum, rates=rates)
+        cost_piece = gross_piece - sav_piece
+
+        if "cache" in tok_type:
+            m_entry["cachedTokens"] += est_cached_sum
+            p["cachedTokens"] += est_cached_sum
+        elif "output" in tok_type or "candidate" in tok_type:
+            m_entry["outputTokens"] += pts_sum
+            p["outputTokens"] += pts_sum
+        elif "think" in tok_type:
+            m_entry["thinkingTokens"] += pts_sum
+            p["thinkingTokens"] += pts_sum
+        else:
+            m_entry["inputTokens"] += pts_sum
+            m_entry["cachedTokens"] += est_cached_sum
+            p["inputTokens"] += pts_sum
+            p["cachedTokens"] += est_cached_sum
+
+        m_entry["totalTokens"] += pts_sum
+        m_entry["grossCostUsd"] = m_entry.get("grossCostUsd", 0.0) + gross_piece
+        m_entry["cacheSavingsUsd"] = m_entry.get("cacheSavingsUsd", 0.0) + sav_piece
+        m_entry["costUsd"] += cost_piece
+        p["totalTokens"] += pts_sum
+        p["vertexGrossCostUsd"] += gross_piece
+        p["vertexCacheSavingsUsd"] += sav_piece
+        p["vertexCostUsd"] += cost_piece
+        p["estimatedCostUsd"] += cost_piece
+
+    has_explicit_vertex_inf = True
+    vertex_inf_creds = [
+        c for c in creds_dict.values()
+        if c.get("vertexInferenceRequests", 0) > 0
+    ]
+    if not vertex_inf_creds:
+        has_explicit_vertex_inf = False
+        vertex_inf_creds = [
+            c for c in creds_dict.values()
+            if "aiplatform.googleapis.com" in c.get("services", set()) and c.get("inferenceRequests", 0) > 0
+        ]
+    req_field = "vertexInferenceRequests" if has_explicit_vertex_inf else "inferenceRequests"
+    total_proj_vertex_inf = sum(c.get(req_field, 0) for c in vertex_inf_creds)
+
+    for day_str, v_day in vertex_daily_tokens.items():
+        if v_day["totalTokens"] <= 0 and v_day["costUsd"] <= 0 and v_day.get("grossCostUsd", 0.0) <= 0:
+            continue
+        day_active = [
+            c for c in vertex_inf_creds
+            if c["dailySeries"].get(day_str, {}).get(req_field, 0) > 0
+        ]
+        if day_active:
+            day_inf_sum = sum(c["dailySeries"][day_str].get(req_field, 0) for c in day_active)
+            for c in day_active:
+                c_day = c["dailySeries"][day_str]
+                c_w = c_day.get(req_field, 0)
+                _apply_vertex_token_share_to_credential(c, c_day, v_day, c_w / float(day_inf_sum))
+        elif vertex_inf_creds and total_proj_vertex_inf > 0:
+            for c in vertex_inf_creds:
+                c_day = c["dailySeries"].setdefault(day_str, empty_day_bucket())
+                c_w = c.get(req_field, 0)
+                _apply_vertex_token_share_to_credential(c, c_day, v_day, c_w / float(total_proj_vertex_inf))
+
+
+def _reprice_apply_dialogflow_atoms(p: dict, models_dict: dict, creds_dict: dict, df_atoms: list) -> None:
+    cred_weights: dict[str, float] = {}
+    per_cred_pts: dict[tuple[str, str, str, str, str], int] = {}
+    for atom in df_atoms:
+        if not isinstance(atom, dict):
+            continue
+        val = int(atom.get("v", 0) or 0)
+        if val <= 0:
+            continue
+        cred_id = str(atom.get("c") or "dialogflow-cx:playbook-llm-runtime")
+        base_model = str(atom.get("m") or "gemini-2.5-flash")
+        loc = str(atom.get("loc") or "eu")
+        mk = str(atom.get("mk") or "df_loc")
+        end_t = str(atom.get("d") or "")[:10]
+        weight = float(atom["w"]) if atom.get("w") is not None else 1.0
+        if cred_id not in cred_weights:
+            cred_weights[cred_id] = weight
+        ck = (cred_id, mk, base_model, loc, end_t)
+        per_cred_pts[ck] = per_cred_pts.get(ck, 0) + val
+
+    dedup_pts: dict[tuple[str, str, str, str], int] = {}
+    for (_cid, mk, base_model, loc, end_t), v_sum in per_cred_pts.items():
+        pk = (mk, base_model, loc, end_t)
+        if pk not in dedup_pts:
+            dedup_pts[pk] = v_sum
+
+    df_series_groups: dict[tuple[str, str, str], list[tuple[str, int]]] = {}
+    for (mk, base_model, loc, end_t), val in dedup_pts.items():
+        df_series_groups.setdefault((mk, base_model, loc), []).append((end_t, val))
+
+    df_daily_tokens: dict[str, dict] = {}
+    for (_mk, base_model, loc), pts_list in df_series_groups.items():
+        df_model_label = f"{base_model} (Dialogflow CX Playbook LLM)"
+        m_entry = models_dict.setdefault(
+            df_model_label, _new_model_usage_entry(df_model_label, service="dialogflow.googleapis.com")
+        )
+        m_entry["locations"].add(loc)
+        pts_sum = 0
+
+        for end_t, val in pts_list:
+            if val <= 0:
+                continue
+            pts_sum += val
+            pt_gross, pt_sav, in_tok, out_tok = dialogflow_token_price(base_model, val)
+            pt_cost = pt_gross - pt_sav
+            pt_cache = 0
+            est_calls = max(1, int(round(val / 3500.0)))
+            if end_t:
+                p_day = p["dailySeries"].setdefault(end_t, empty_day_bucket())
+                m_day = m_entry["dailySeries"].setdefault(end_t, empty_day_bucket())
+                d_day = df_daily_tokens.setdefault(end_t, {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "totalTokens": 0,
+                    "cachedTokens": 0,
+                    "grossCostUsd": 0.0,
+                    "costUsd": 0.0,
+                })
+
+                p_day["inputTokens"] += in_tok
+                p_day["outputTokens"] += out_tok
+                p_day["cachedTokens"] += pt_cache
+                p_day["tokens"] += val
+                p_day["otherAiCostUsd"] += pt_cost
+                p_day["costUsd"] += pt_cost
+
+                m_day["requests"] += est_calls
+                m_day["inferenceRequests"] += est_calls
+                m_day["inputTokens"] += in_tok
+                m_day["outputTokens"] += out_tok
+                m_day["cachedTokens"] += pt_cache
+                m_day["tokens"] += val
+                m_day["otherAiCostUsd"] += pt_cost
+                m_day["costUsd"] += pt_cost
+
+                d_day["inputTokens"] += in_tok
+                d_day["outputTokens"] += out_tok
+                d_day["totalTokens"] += val
+                d_day["cachedTokens"] += pt_cache
+                d_day["grossCostUsd"] += pt_gross
+                d_day["costUsd"] += pt_cost
+
+        if pts_sum <= 0:
+            continue
+
+        tot_gross, tot_sav, tot_in, tot_out = dialogflow_token_price(base_model, pts_sum)
+        tot_cost = tot_gross - tot_sav
+        tot_cache = 0
+        tot_est_calls = max(1, int(round(pts_sum / 3500.0)))
+
+        m_entry["invocations"] += tot_est_calls
+        m_entry["inputTokens"] += tot_in
+        m_entry["outputTokens"] += tot_out
+        m_entry["cachedTokens"] += tot_cache
+        m_entry["totalTokens"] += pts_sum
+        m_entry["grossCostUsd"] = m_entry.get("grossCostUsd", 0.0) + tot_gross
+        m_entry["cacheSavingsUsd"] = m_entry.get("cacheSavingsUsd", 0.0) + tot_sav
+        m_entry["costUsd"] += tot_cost
+
+        p["inputTokens"] += tot_in
+        p["outputTokens"] += tot_out
+        p["cachedTokens"] += tot_cache
+        p["totalTokens"] += pts_sum
+        p["otherAiGrossCostUsd"] += tot_gross
+        p["otherAiCacheSavingsUsd"] += tot_sav
+        p["otherAiCostUsd"] += tot_cost
+        p["estimatedCostUsd"] += tot_cost
+
+    if not df_daily_tokens or not cred_weights:
+        return
+
+    for day_str, d_day in df_daily_tokens.items():
+        for cred_id, weight in cred_weights.items():
+            c = creds_dict.get(cred_id)
+            if c is None:
+                c = {
+                    "credentialId": cred_id,
+                    "resolvedName": "Dialogflow CX Playbook / Console Simulator (LLM Runtime)" if cred_id == "dialogflow-cx:playbook-llm-runtime" else cred_id,
+                    "resolvedType": "OAUTH_CLIENT",
+                    "service": "dialogflow.googleapis.com",
+                    "services": {"dialogflow.googleapis.com"},
+                    "requests": 0,
+                    "inferenceRequests": 0,
+                    "vertexInferenceRequests": 0,
+                    "systemRequests": 0,
+                    "ok200": 0,
+                    "ok200Inference": 0,
+                    "errors429": 0,
+                    "otherErrors": 0,
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "cachedTokens": 0,
+                    "totalTokens": 0,
+                    "grossCostUsd": 0.0,
+                    "cacheSavingsUsd": 0.0,
+                    "estimatedCostUsd": 0.0,
+                    "costSource": "DIALOGFLOW_LLM_TOKENS",
+                    "methods": {"PlaybookLLM"},
+                    "inferenceMethods": {"PlaybookLLM"},
+                    "systemMethods": set(),
+                    "dailySeries": {},
+                }
+                creds_dict[cred_id] = c
+
+            add_in = int(round(d_day["inputTokens"] * weight))
+            add_out = int(round(d_day["outputTokens"] * weight))
+            add_tot = int(round(d_day["totalTokens"] * weight))
+            add_cache = int(round(d_day["cachedTokens"] * weight))
+            add_gross = d_day["grossCostUsd"] * weight
+            add_cost = d_day["costUsd"] * weight
+            add_sav = add_gross - add_cost
+
+            c_day = c["dailySeries"].setdefault(day_str, empty_day_bucket())
+            c_day["inputTokens"] += add_in
+            c_day["outputTokens"] += add_out
+            c_day["cachedTokens"] += add_cache
+            c_day["tokens"] += add_tot
+            c_day["otherAiCostUsd"] += add_cost
+            c_day["costUsd"] += add_cost
+
+            c["inputTokens"] += add_in
+            c["outputTokens"] += add_out
+            c["cachedTokens"] += add_cache
+            c["totalTokens"] += add_tot
+            c["grossCostUsd"] = c.get("grossCostUsd", 0.0) + add_gross
+            c["cacheSavingsUsd"] = c.get("cacheSavingsUsd", 0.0) + add_sav
+            c["estimatedCostUsd"] += add_cost
+            c["costSource"] = "DIALOGFLOW_CX_AND_LLM"
+
+
+def _reprice_reconcile_keys_sas_and_users(
+    p: dict, creds_dict: dict, today_str: str, yesterday_str: str
+) -> None:
+    apikeys_by_uid: dict[str, dict] = {}
+    for k in (p.get("apiKeys") or []):
+        if not isinstance(k, dict):
+            continue
+        uid = str(k.get("uid", "") or "")
+        cred_usage = creds_dict.get(f"apikey:{uid}", {})
+        k_today = str(k.get("todayDate") or today_str)[:10]
+        k_yest = str(k.get("yesterdayDate") or yesterday_str)[:10]
+        inf_reqs = int(cred_usage.get("inferenceRequests", k.get("inferenceRequests", 0)) or 0)
+        ok200_inf = int(cred_usage.get("ok200Inference", k.get("ok200Inference", 0)) or 0)
+        est_cost = round(float(cred_usage.get("estimatedCostUsd", 0.0) or 0.0), 4)
+        gross_cost = round(float(cred_usage.get("grossCostUsd", est_cost) or 0.0), 4)
+        cache_sav = round(float(cred_usage.get("cacheSavingsUsd", 0.0) or 0.0), 4)
+        d_ser = cred_usage.get("dailySeries") or {}
+        t_b = d_ser.get(k_today) or {}
+        y_b = d_ser.get(k_yest) or {}
+
+        k["requests"] = int(cred_usage.get("requests", k.get("requests", 0)) or 0)
+        k["inferenceRequests"] = inf_reqs
+        k["ok200Inference"] = ok200_inf
+        k["failedInference"] = max(0, inf_reqs - ok200_inf)
+        k["inputTokens"] = int(cred_usage.get("inputTokens", 0) or 0)
+        k["outputTokens"] = int(cred_usage.get("outputTokens", 0) or 0)
+        k["cachedTokens"] = int(cred_usage.get("cachedTokens", 0) or 0)
+        k["totalTokens"] = int(cred_usage.get("totalTokens", 0) or 0)
+        k["requestBytes"] = int(cred_usage.get("requestBytes", 0) or 0)
+        k["responseBytes"] = int(cred_usage.get("responseBytes", 0) or 0)
+        k["grossCostUsd"] = gross_cost
+        k["cacheSavingsUsd"] = cache_sav
+        k["estimatedCostUsd"] = est_cost
+        k["todayDate"] = k_today
+        k["todayCalls"] = int(t_b.get("inferenceRequests", 0) or t_b.get("requests", 0) or 0)
+        k["todayTokens"] = int(t_b.get("tokens", 0) or 0)
+        k["todayCostUsd"] = round(float(t_b.get("costUsd", 0.0) or 0.0), 4)
+        k["yesterdayDate"] = k_yest
+        k["yesterdayCalls"] = int(y_b.get("inferenceRequests", 0) or y_b.get("requests", 0) or 0)
+        k["yesterdayTokens"] = int(y_b.get("tokens", 0) or 0)
+        k["yesterdayCostUsd"] = round(float(y_b.get("costUsd", 0.0) or 0.0), 4)
+        k["costSource"] = cred_usage.get("costSource", "NONE")
+        if uid:
+            apikeys_by_uid[uid] = k
+
+    if p.get("apiKeys"):
+        p["apiKeys"].sort(
+            key=lambda x: (x.get("estimatedCostUsd", 0.0), x.get("requests", 0), x.get("status") == "ACTIVE"),
+            reverse=True,
+        )
+
+    for sa in (p.get("serviceAccounts") or []):
+        if not isinstance(sa, dict):
+            continue
+        sa_uid = str(sa.get("uniqueId", "") or "")
+        sa_cred = creds_dict.get(f"serviceaccount:{sa_uid}")
+        if sa_cred is None and sa.get("email"):
+            sa_email_low = str(sa.get("email") or "").strip().lower()
+            sa_cred = next(
+                (
+                    c for c in creds_dict.values()
+                    if str(c.get("credentialId") or "").startswith("serviceaccount:")
+                    and (
+                        str(c.get("email") or "").strip().lower() == sa_email_low
+                        or sa_email_low in str(c.get("resolvedName") or "").lower()
+                    )
+                ),
+                None,
+            )
+        if sa_cred is not None:
+            sa["totalTokens"] = int(sa_cred.get("totalTokens", 0) or 0)
+            sa["estimatedCostUsd"] = round(float(sa_cred.get("estimatedCostUsd", 0.0) or 0.0), 4)
+    if p.get("serviceAccounts"):
+        p["serviceAccounts"].sort(
+            key=lambda x: (
+                x.get("estimatedCostUsd", 0.0),
+                x.get("totalTokens", 0),
+                x.get("inferenceRequests", 0),
+                x.get("requests", 0),
+            ),
+            reverse=True,
+        )
+
+    users_list = [u for u in (p.get("usersUsage") or []) if isinstance(u, dict)]
+    if not users_list:
+        return
+
+    attributed_cids: set[str] = set()
+    for u_rec in users_list:
+        for oc_item in (u_rec.get("oauthClientsDetails") or []):
+            if isinstance(oc_item, dict) and oc_item.get("credentialId"):
+                attributed_cids.add(str(oc_item["credentialId"]))
+    for cid, c_obj in creds_dict.items():
+        if (
+            not cid.startswith("apikey:")
+            and not cid.startswith("serviceaccount:")
+            and cid != "system:unattributed-audit-logs-disabled"
+            and c_obj.get("ownerEmail")
+        ):
+            attributed_cids.add(cid)
+
+    oauth_pool_cost = 0.0
+    oauth_pool_tokens = 0
+    for cid, c_obj in creds_dict.items():
+        if cid in attributed_cids:
+            continue
+        if not cid.startswith("apikey:") and not cid.startswith("serviceaccount:") and cid != "system:unattributed-audit-logs-disabled":
+            c_est = float(c_obj.get("estimatedCostUsd", 0.0) or 0.0)
+            c_vtx = float(c_obj.get("vertexCostUsd", 0.0) or 0.0)
+            svcs_c = c_obj.get("services") or set()
+            if c_vtx <= 0 and "aiplatform.googleapis.com" in svcs_c and len(svcs_c) == 1:
+                continue
+            non_vtx_cost = max(0.0, c_est - c_vtx)
+            oauth_pool_cost += non_vtx_cost
+            if non_vtx_cost > 0:
+                oauth_pool_tokens += int(c_obj.get("totalTokens", 0) or 0)
+
+    rates_u = get_model_rates("gemini-2.5-pro")
+    total_direct_oauth_cost = 0.0
+    total_oauth_weight = 0.0
+    saved_share_sum = sum(max(0.0, float(u.get("oauthSharePct", 0.0) or 0.0)) for u in users_list)
+
+    for u_rec in users_list:
+        if u_rec.get("oauthClientsDetails"):
+            old_vo_calls = int(u_rec.get("vertexOauthCalls", 0) or 0)
+            vo_c_sum = 0
+            vo_in_sum = 0
+            vo_out_sum = 0
+            vo_cache_sum = 0
+            vo_tok_sum = 0
+            vo_gross_sum = 0.0
+            vo_sav_sum = 0.0
+            vo_cost_sum = 0.0
+            vo_tc_sum = 0
+            vo_tt_sum = 0
+            vo_tcost_sum = 0.0
+            vo_yc_sum = 0
+            vo_yt_sum = 0
+            vo_ycost_sum = 0.0
+            for oc_item in (u_rec.get("oauthClientsDetails") or []):
+                if not isinstance(oc_item, dict):
+                    continue
+                oc_cid = str(oc_item.get("credentialId") or "")
+                c_obj = creds_dict.get(oc_cid)
+                oc_today = str(oc_item.get("todayDate") or today_str)[:10]
+                oc_yest = str(oc_item.get("yesterdayDate") or yesterday_str)[:10]
+                if c_obj is not None:
+                    v_inf_calls = int(c_obj.get("vertexInferenceRequests", 0) or 0)
+                    inf_calls = int(c_obj.get("inferenceRequests", 0) or c_obj.get("requests", 0) or 0)
+                    vo_calls = v_inf_calls if v_inf_calls > 0 else inf_calls
+                    vo_in = int(c_obj.get("inputTokens", 0) or 0)
+                    vo_out = int(c_obj.get("outputTokens", 0) or 0)
+                    vo_cache = int(c_obj.get("cachedTokens", 0) or 0)
+                    tot_tok_c = int(c_obj.get("totalTokens", 0) or 0)
+                    cost_c = float(c_obj.get("estimatedCostUsd", 0.0) or 0.0)
+                    vo_gross = float(c_obj.get("grossCostUsd", cost_c) or 0.0)
+                    vo_sav = float(c_obj.get("cacheSavingsUsd", 0.0) or 0.0)
+                    d_series = c_obj.get("dailySeries") or {}
+                    today_b = d_series.get(oc_today) or {}
+                    yest_b = d_series.get(oc_yest) or {}
+                    c_today_calls = int(today_b.get("inferenceRequests", 0) or today_b.get("requests", 0) or 0)
+                    c_today_tok = int(today_b.get("tokens", 0) or 0)
+                    c_today_cost = float(today_b.get("costUsd", 0.0) or 0.0)
+                    c_yest_calls = int(yest_b.get("inferenceRequests", 0) or yest_b.get("requests", 0) or 0)
+                    c_yest_tok = int(yest_b.get("tokens", 0) or 0)
+                    c_yest_cost = float(yest_b.get("costUsd", 0.0) or 0.0)
+
+                    oc_item["calls"] = vo_calls
+                    oc_item["ok200Calls"] = int(c_obj.get("ok200Inference", vo_calls) or 0)
+                    oc_item["errors429"] = int(c_obj.get("errors429", 0) or 0)
+                    oc_item["inputTokens"] = vo_in
+                    oc_item["outputTokens"] = vo_out
+                    oc_item["cachedTokens"] = vo_cache
+                    oc_item["totalTokens"] = tot_tok_c
+                    oc_item["grossCostUsd"] = round(vo_gross, 4)
+                    oc_item["cacheSavingsUsd"] = round(vo_sav, 4)
+                    oc_item["costUsd"] = round(cost_c, 4)
+                    oc_item["todayDate"] = oc_today
+                    oc_item["todayCalls"] = c_today_calls
+                    oc_item["todayTokens"] = c_today_tok
+                    oc_item["todayCostUsd"] = round(c_today_cost, 4)
+                    oc_item["yesterdayDate"] = oc_yest
+                    oc_item["yesterdayCalls"] = c_yest_calls
+                    oc_item["yesterdayTokens"] = c_yest_tok
+                    oc_item["yesterdayCostUsd"] = round(c_yest_cost, 4)
+                else:
+                    vo_calls = int(oc_item.get("calls", 0) or 0)
+                    vo_in = int(oc_item.get("inputTokens", 0) or 0)
+                    vo_out = int(oc_item.get("outputTokens", 0) or 0)
+                    vo_cache = int(oc_item.get("cachedTokens", 0) or 0)
+                    tot_tok_c = int(oc_item.get("totalTokens", 0) or 0)
+                    cost_c = float(oc_item.get("costUsd", 0.0) or 0.0)
+                    vo_gross = float(oc_item.get("grossCostUsd", cost_c) or 0.0)
+                    vo_sav = float(oc_item.get("cacheSavingsUsd", 0.0) or 0.0)
+                    c_today_calls = int(oc_item.get("todayCalls", 0) or 0)
+                    c_today_tok = int(oc_item.get("todayTokens", 0) or 0)
+                    c_today_cost = float(oc_item.get("todayCostUsd", 0.0) or 0.0)
+                    c_yest_calls = int(oc_item.get("yesterdayCalls", 0) or 0)
+                    c_yest_tok = int(oc_item.get("yesterdayTokens", 0) or 0)
+                    c_yest_cost = float(oc_item.get("yesterdayCostUsd", 0.0) or 0.0)
+
+                vo_c_sum += vo_calls
+                vo_in_sum += vo_in
+                vo_out_sum += vo_out
+                vo_cache_sum += vo_cache
+                vo_tok_sum += tot_tok_c
+                vo_gross_sum += vo_gross
+                vo_sav_sum += vo_sav
+                vo_cost_sum += cost_c
+                vo_tc_sum += c_today_calls
+                vo_tt_sum += c_today_tok
+                vo_tcost_sum += c_today_cost
+                vo_yc_sum += c_yest_calls
+                vo_yt_sum += c_yest_tok
+                vo_ycost_sum += c_yest_cost
+
+            u_rec["vertexOauthCalls"] = vo_c_sum
+            u_rec["vertexOauthInputTokens"] = vo_in_sum
+            u_rec["vertexOauthOutputTokens"] = vo_out_sum
+            u_rec["vertexOauthCachedTokens"] = vo_cache_sum
+            u_rec["vertexOauthTokens"] = vo_tok_sum
+            u_rec["vertexOauthGrossCostUsd"] = round(vo_gross_sum, 4)
+            u_rec["vertexOauthCacheSavingsUsd"] = round(vo_sav_sum, 4)
+            u_rec["vertexOauthCostUsd"] = round(vo_cost_sum, 4)
+            u_rec["vertexOauthTodayCalls"] = vo_tc_sum
+            u_rec["vertexOauthTodayTokens"] = vo_tt_sum
+            u_rec["vertexOauthTodayCostUsd"] = round(vo_tcost_sum, 4)
+            u_rec["vertexOauthYesterdayCalls"] = vo_yc_sum
+            u_rec["vertexOauthYesterdayTokens"] = vo_yt_sum
+            u_rec["vertexOauthYesterdayCostUsd"] = round(vo_ycost_sum, 4)
+            u_rec["totalInteractions"] = max(0, int(u_rec.get("totalInteractions", 0) or 0) - old_vo_calls + vo_c_sum)
+            u_rec["oauthClientsDetails"].sort(
+                key=lambda x: (x.get("costUsd", 0.0), x.get("totalTokens", 0), x.get("calls", 0)),
+                reverse=True,
+            )
+
+        if u_rec.get("apiKeysDetails"):
+            ak_c_sum = 0
+            ak_in_sum = 0
+            ak_out_sum = 0
+            ak_cache_sum = 0
+            ak_tok_sum = 0
+            ak_rb_sum = 0
+            ak_rsb_sum = 0
+            ak_gross_sum = 0.0
+            ak_sav_sum = 0.0
+            ak_cost_sum = 0.0
+            ak_tc_sum = 0
+            ak_tt_sum = 0
+            ak_tcost_sum = 0.0
+            ak_yc_sum = 0
+            ak_yt_sum = 0
+            ak_ycost_sum = 0.0
+            for kd_item in (u_rec.get("apiKeysDetails") or []):
+                if not isinstance(kd_item, dict):
+                    continue
+                uid = str(kd_item.get("uid") or "")
+                k_obj = apikeys_by_uid.get(uid)
+                c_obj = creds_dict.get(f"apikey:{uid}")
+                kd_today = str(kd_item.get("todayDate") or today_str)[:10]
+                kd_yest = str(kd_item.get("yesterdayDate") or yesterday_str)[:10]
+                if k_obj is not None:
+                    k_calls = int(k_obj.get("inferenceRequests", 0) or k_obj.get("requests", 0) or 0)
+                    k_ok200 = int(k_obj.get("ok200Inference", k_calls) or 0)
+                    k_in = int(k_obj.get("inputTokens", 0) or 0)
+                    k_out = int(k_obj.get("outputTokens", 0) or 0)
+                    k_cache = int(k_obj.get("cachedTokens", 0) or 0)
+                    k_tot = int(k_obj.get("totalTokens", 0) or 0)
+                    k_rb = int(k_obj.get("requestBytes", 0) or 0)
+                    k_rsb = int(k_obj.get("responseBytes", 0) or 0)
+                    k_cost = float(k_obj.get("estimatedCostUsd", 0.0) or 0.0)
+                    k_gross = float(k_obj.get("grossCostUsd", k_cost) or 0.0)
+                    k_sav = float(k_obj.get("cacheSavingsUsd", 0.0) or 0.0)
+                    k_tc = int(k_obj.get("todayCalls", 0) or 0)
+                    k_tt = int(k_obj.get("todayTokens", 0) or 0)
+                    k_tcost = float(k_obj.get("todayCostUsd", 0.0) or 0.0)
+                    k_yc = int(k_obj.get("yesterdayCalls", 0) or 0)
+                    k_yt = int(k_obj.get("yesterdayTokens", 0) or 0)
+                    k_ycost = float(k_obj.get("yesterdayCostUsd", 0.0) or 0.0)
+                elif c_obj is not None:
+                    k_calls = int(c_obj.get("inferenceRequests", 0) or c_obj.get("requests", 0) or 0)
+                    k_ok200 = int(c_obj.get("ok200Inference", k_calls) or 0)
+                    k_in = int(c_obj.get("inputTokens", 0) or 0)
+                    k_out = int(c_obj.get("outputTokens", 0) or 0)
+                    k_cache = int(c_obj.get("cachedTokens", 0) or 0)
+                    k_tot = int(c_obj.get("totalTokens", 0) or 0)
+                    k_rb = int(c_obj.get("requestBytes", 0) or 0)
+                    k_rsb = int(c_obj.get("responseBytes", 0) or 0)
+                    k_cost = round(float(c_obj.get("estimatedCostUsd", 0.0) or 0.0), 4)
+                    k_gross = round(float(c_obj.get("grossCostUsd", k_cost) or 0.0), 4)
+                    k_sav = round(float(c_obj.get("cacheSavingsUsd", 0.0) or 0.0), 4)
+                    d_ser_k = c_obj.get("dailySeries") or {}
+                    tb_k = d_ser_k.get(kd_today) or {}
+                    yb_k = d_ser_k.get(kd_yest) or {}
+                    k_tc = int(tb_k.get("inferenceRequests", 0) or tb_k.get("requests", 0) or 0)
+                    k_tt = int(tb_k.get("tokens", 0) or 0)
+                    k_tcost = round(float(tb_k.get("costUsd", 0.0) or 0.0), 4)
+                    k_yc = int(yb_k.get("inferenceRequests", 0) or yb_k.get("requests", 0) or 0)
+                    k_yt = int(yb_k.get("tokens", 0) or 0)
+                    k_ycost = round(float(yb_k.get("costUsd", 0.0) or 0.0), 4)
+                else:
+                    k_calls = int(kd_item.get("calls", 0) or 0)
+                    k_ok200 = int(kd_item.get("ok200Calls", k_calls) or 0)
+                    k_in = int(kd_item.get("inputTokens", 0) or 0)
+                    k_out = int(kd_item.get("outputTokens", 0) or 0)
+                    k_cache = 0
+                    k_tot = int(kd_item.get("totalTokens", 0) or 0)
+                    k_rb = int(kd_item.get("requestBytes", 0) or 0)
+                    k_rsb = int(kd_item.get("responseBytes", 0) or 0)
+                    k_cost = float(kd_item.get("costUsd", 0.0) or 0.0)
+                    k_gross = float(kd_item.get("grossCostUsd", k_cost) or 0.0)
+                    k_sav = float(kd_item.get("cacheSavingsUsd", 0.0) or 0.0)
+                    k_tc = int(kd_item.get("todayCalls", 0) or 0)
+                    k_tt = int(kd_item.get("todayTokens", 0) or 0)
+                    k_tcost = float(kd_item.get("todayCostUsd", 0.0) or 0.0)
+                    k_yc = int(kd_item.get("yesterdayCalls", 0) or 0)
+                    k_yt = int(kd_item.get("yesterdayTokens", 0) or 0)
+                    k_ycost = float(kd_item.get("yesterdayCostUsd", 0.0) or 0.0)
+
+                kd_item["calls"] = k_calls
+                kd_item["ok200Calls"] = k_ok200
+                kd_item["inputTokens"] = k_in
+                kd_item["outputTokens"] = k_out
+                kd_item["totalTokens"] = k_tot
+                kd_item["requestBytes"] = k_rb
+                kd_item["responseBytes"] = k_rsb
+                kd_item["grossCostUsd"] = round(k_gross, 4)
+                kd_item["cacheSavingsUsd"] = round(k_sav, 4)
+                kd_item["costUsd"] = round(k_cost, 4)
+                kd_item["todayDate"] = kd_today
+                kd_item["todayCalls"] = k_tc
+                kd_item["todayTokens"] = k_tt
+                kd_item["todayCostUsd"] = round(k_tcost, 4)
+                kd_item["yesterdayDate"] = kd_yest
+                kd_item["yesterdayCalls"] = k_yc
+                kd_item["yesterdayTokens"] = k_yt
+                kd_item["yesterdayCostUsd"] = round(k_ycost, 4)
+
+                ak_c_sum += k_calls
+                ak_in_sum += k_in
+                ak_out_sum += k_out
+                ak_cache_sum += k_cache
+                ak_tok_sum += k_tot
+                ak_rb_sum += k_rb
+                ak_rsb_sum += k_rsb
+                ak_gross_sum += k_gross
+                ak_sav_sum += k_sav
+                ak_cost_sum += k_cost
+                ak_tc_sum += k_tc
+                ak_tt_sum += k_tt
+                ak_tcost_sum += k_tcost
+                ak_yc_sum += k_yc
+                ak_yt_sum += k_yt
+                ak_ycost_sum += k_ycost
+
+            u_rec["apiKeysCalls"] = ak_c_sum
+            u_rec["apiKeysInputTokens"] = ak_in_sum
+            u_rec["apiKeysOutputTokens"] = ak_out_sum
+            u_rec["apiKeysCachedTokens"] = ak_cache_sum
+            u_rec["apiKeysTotalTokens"] = ak_tok_sum
+            u_rec["apiKeysRequestBytes"] = ak_rb_sum
+            u_rec["apiKeysResponseBytes"] = ak_rsb_sum
+            u_rec["apiKeysGrossCostUsd"] = round(ak_gross_sum, 4)
+            u_rec["apiKeysCacheSavingsUsd"] = round(ak_sav_sum, 4)
+            u_rec["apiKeysCostUsd"] = round(ak_cost_sum, 4)
+            u_rec["apiKeysTodayCalls"] = ak_tc_sum
+            u_rec["apiKeysTodayTokens"] = ak_tt_sum
+            u_rec["apiKeysTodayCostUsd"] = round(ak_tcost_sum, 4)
+            u_rec["apiKeysYesterdayCalls"] = ak_yc_sum
+            u_rec["apiKeysYesterdayTokens"] = ak_yt_sum
+            u_rec["apiKeysYesterdayCostUsd"] = round(ak_ycost_sum, 4)
+            u_rec["apiKeysDetails"].sort(
+                key=lambda x: (x.get("costUsd", 0.0), x.get("totalTokens", 0), x.get("calls", 0)),
+                reverse=True,
+            )
+
+        ca_calls = int(u_rec.get("codeAssistCalls", 0) or 0)
+        ca_in_chars = int(u_rec.get("codeAssistInputChars", 0) or 0)
+        ca_out_chars = int(u_rec.get("codeAssistOutputChars", 0) or 0)
+        if ca_calls > 0 or ca_in_chars > 0 or ca_out_chars > 0:
+            ca_in_tok = int(round(ca_in_chars / 4.0)) if ca_in_chars > 0 else (ca_calls * 180)
+            ca_out_tok = int(round(ca_out_chars / 4.0)) if ca_out_chars > 0 else (ca_calls * 65)
+            if int(u_rec.get("loggedTotalTokens", 0) or 0) == 0:
+                u_rec["loggedInputTokens"] = ca_in_tok
+                u_rec["loggedOutputTokens"] = ca_out_tok
+                u_rec["loggedTotalTokens"] = ca_in_tok + ca_out_tok
+
+        log_in = int(u_rec.get("loggedInputTokens", 0) or 0)
+        log_cached = int(u_rec.get("loggedCachedTokens", 0) or 0)
+        log_out = int(u_rec.get("loggedOutputTokens", 0) or 0)
+        log_tot = int(u_rec.get("loggedTotalTokens", 0) or 0)
+        assist_t = int(u_rec.get("assistTurns", 0) or 0)
+        search_q = int(u_rec.get("searchQueries", 0) or 0)
+        file_ops = int(u_rec.get("fileOps", 0) or 0)
+        other_c = int(u_rec.get("otherCalls", 0) or 0)
+
+        non_cached_in = max(0, log_in - log_cached)
+        tok_cost = (
+            (non_cached_in / 1_000_000.0) * rates_u["input"] +
+            (log_cached / 1_000_000.0) * rates_u["cache_read_input"] +
+            (log_out / 1_000_000.0) * rates_u["output"]
+        )
+        assist_cost = assist_t * (0.0041 if log_tot == 0 else 0.0015)
+        search_cost = search_q * 0.0015
+        code_cost = ca_calls * 0.00084
+
+        direct_oauth = tok_cost + assist_cost + search_cost + code_cost
+        u_rec["_directOauth"] = direct_oauth
+        total_direct_oauth_cost += direct_oauth
+
+        has_oauth_activity = any(x > 0 for x in (assist_t, search_q, ca_calls, file_ops, other_c, log_tot))
+        weight = (
+            direct_oauth * 100.0 +
+            assist_t * 0.40 +
+            search_q * 0.12 +
+            ca_calls * 0.08 +
+            file_ops * 0.05 +
+            (0.01 if has_oauth_activity else 0.0)
+        )
+        u_rec["_weight"] = weight
+        total_oauth_weight += weight
+
+    target_pool_cost = oauth_pool_cost if oauth_pool_cost > 0 else total_direct_oauth_cost
+    target_pool_tokens = max(oauth_pool_tokens, sum(int(u.get("loggedTotalTokens", 0) or 0) for u in users_list))
+
+    for u_rec in users_list:
+        if total_oauth_weight > 0:
+            w_share = (u_rec["_weight"] / total_oauth_weight) if u_rec["_weight"] > 0 else 0.0
+        elif saved_share_sum > 0:
+            w_share = max(0.0, float(u_rec.get("oauthSharePct", 0.0) or 0.0)) / saved_share_sum
+        else:
+            w_share = 0.0
+        direct_oauth = u_rec.pop("_directOauth", 0.0)
+        u_rec.pop("_weight", None)
+
+        vo_calls = int(u_rec.get("vertexOauthCalls", 0) or 0)
+        vo_tok = int(u_rec.get("vertexOauthTokens", 0) or 0)
+        vo_cost = round(float(u_rec.get("vertexOauthCostUsd", 0.0) or 0.0), 4)
+        ak_cost = round(float(u_rec.get("apiKeysCostUsd", 0.0) or 0.0), 4)
+        ak_tok = int(u_rec.get("apiKeysTotalTokens", 0) or 0)
+        ak_calls_u = int(u_rec.get("apiKeysCalls", 0) or 0)
+        log_tot_u = int(u_rec.get("loggedTotalTokens", 0) or 0)
+
+        pool_oauth_cost = (target_pool_cost * w_share) if target_pool_cost > 0 else direct_oauth
+        pool_oauth_tok = max(log_tot_u, int(round(target_pool_tokens * w_share))) if w_share > 0 else log_tot_u
+
+        oauth_est_cost = pool_oauth_cost + vo_cost
+        oauth_attr_tok = pool_oauth_tok + vo_tok
+
+        u_rec["oauthCostUsd"] = round(oauth_est_cost, 4)
+        u_rec["oauthSharePct"] = round(w_share * 100.0, 2)
+        u_rec["directCostUsd"] = round(direct_oauth + vo_cost + ak_cost, 4)
+        u_rec["estimatedCostUsd"] = round(oauth_est_cost + ak_cost, 4)
+        u_rec["attributedTokens"] = oauth_attr_tok + ak_tok
+
+        ca_calls_u = int(u_rec.get("codeAssistCalls", 0) or 0)
+        if ca_calls_u > 0:
+            if int(u_rec.get("assistTurns", 0) or 0) == 0 and int(u_rec.get("searchQueries", 0) or 0) == 0:
+                ca_cost_u = round(pool_oauth_cost, 4)
+                ca_tok_u = int(pool_oauth_tok)
+            else:
+                ca_cost_u = round(min(pool_oauth_cost, ca_calls_u * 0.0014), 4)
+                ca_tok_u = ca_calls_u * 245
+        else:
+            ca_cost_u = 0.0
+            ca_tok_u = 0
+        u_rec["codeAssistCostUsd"] = ca_cost_u
+        u_rec["codeAssistTokens"] = ca_tok_u
+        u_rec["antigravityIdeCalls"] = ca_calls_u + ak_calls_u + vo_calls
+        u_rec["antigravityIdeTokens"] = ca_tok_u + ak_tok + vo_tok
+        u_rec["antigravityIdeCostUsd"] = round(ca_cost_u + ak_cost + vo_cost, 4)
+
+    total_all_users_cost = sum(float(u.get("estimatedCostUsd", 0.0) or 0.0) for u in users_list)
+    total_all_users_int = sum(int(u.get("totalInteractions", 0) or 0) for u in users_list)
+    for u_rec in users_list:
+        if total_all_users_cost > 0:
+            u_rec["sharePct"] = round((float(u_rec.get("estimatedCostUsd", 0.0) or 0.0) / total_all_users_cost) * 100.0, 2)
+        elif total_all_users_int > 0:
+            u_rec["sharePct"] = round((int(u_rec.get("totalInteractions", 0) or 0) / float(total_all_users_int)) * 100.0, 2)
+        else:
+            u_rec["sharePct"] = round(100.0 / len(users_list), 2)
+
+    users_list.sort(
+        key=lambda x: (x.get("estimatedCostUsd", 0.0), x.get("attributedTokens", 0), x.get("totalInteractions", 0)),
+        reverse=True,
+    )
+    p["usersUsage"] = users_list
+
+
+def _reprice_finalize_project_totals(
+    p: dict, models_dict: dict, creds_dict: dict, today_str: str, yesterday_str: str
+) -> None:
+    if (
+        int(p.get("totalRequests", 0) or 0) > 0
+        or int(p.get("totalTokens", 0) or 0) > 0
+        or len(p.get("deployedAiResources") or []) > 0
+        or any(isinstance(k, dict) and k.get("isAiStudioKey") for k in (p.get("apiKeys") or []))
+    ):
+        p["aiActive"] = True
+
+    models_list = []
+    for _m_id, m_obj in models_dict.items():
+        m_obj["locations"] = sorted(list(m_obj.get("locations") or set()))
+        m_obj["costUsd"] = round(float(m_obj.get("costUsd", 0.0) or 0.0), 4)
+        m_obj["grossCostUsd"] = round(float(m_obj.get("grossCostUsd", m_obj["costUsd"]) or 0.0), 4)
+        m_obj["cacheSavingsUsd"] = round(float(m_obj.get("cacheSavingsUsd", 0.0) or 0.0), 4)
+        for d_v in (m_obj.get("dailySeries") or {}).values():
+            d_v["costUsd"] = round(float(d_v.get("costUsd", 0.0) or 0.0), 4)
+            d_v["otherAiCostUsd"] = round(float(d_v.get("otherAiCostUsd", 0.0) or 0.0), 4)
+        models_list.append(m_obj)
+    models_list.sort(key=lambda x: (x["costUsd"], x["totalTokens"], x["invocations"]), reverse=True)
+    p["models"] = models_list
+
+    creds_list = []
+    for c_id, c_obj in creds_dict.items():
+        c_obj["services"] = sorted(list(c_obj.get("services") or set()))
+        c_obj["methods"] = sorted(list(c_obj.get("methods") or set()))
+        c_obj["inferenceMethods"] = sorted(list(c_obj.get("inferenceMethods") or set()))
+        c_obj["systemMethods"] = sorted(list(c_obj.get("systemMethods") or set()))
+        c_obj["estimatedCostUsd"] = round(float(c_obj.get("estimatedCostUsd", 0.0) or 0.0), 4)
+        c_obj["grossCostUsd"] = round(float(c_obj.get("grossCostUsd", c_obj["estimatedCostUsd"]) or 0.0), 4)
+        c_obj["cacheSavingsUsd"] = round(float(c_obj.get("cacheSavingsUsd", 0.0) or 0.0), 4)
+        d_ser_c = c_obj.get("dailySeries") or {}
+        t_bc = d_ser_c.get(today_str) or {}
+        y_bc = d_ser_c.get(yesterday_str) or {}
+        c_obj["todayDate"] = today_str
+        c_obj["todayCalls"] = int(t_bc.get("inferenceRequests", 0) or t_bc.get("requests", 0) or 0)
+        c_obj["todayTokens"] = int(t_bc.get("tokens", 0) or 0)
+        c_obj["todayCostUsd"] = round(float(t_bc.get("costUsd", 0.0) or 0.0), 4)
+        c_obj["yesterdayDate"] = yesterday_str
+        c_obj["yesterdayCalls"] = int(y_bc.get("inferenceRequests", 0) or y_bc.get("requests", 0) or 0)
+        c_obj["yesterdayTokens"] = int(y_bc.get("tokens", 0) or 0)
+        c_obj["yesterdayCostUsd"] = round(float(y_bc.get("costUsd", 0.0) or 0.0), 4)
+        for d_v in d_ser_c.values():
+            d_v["costUsd"] = round(float(d_v.get("costUsd", 0.0) or 0.0), 4)
+            d_v["vertexCostUsd"] = round(float(d_v.get("vertexCostUsd", 0.0) or 0.0), 4)
+            d_v["geminiCostUsd"] = round(float(d_v.get("geminiCostUsd", 0.0) or 0.0), 4)
+            d_v["otherAiCostUsd"] = round(float(d_v.get("otherAiCostUsd", 0.0) or 0.0), 4)
+
+        if "resolvedName" not in c_obj:
+            if c_id.startswith("apikey:"):
+                c_obj["resolvedName"] = f"API Key ({c_id.split(':', 1)[1][:10]}...)"
+                c_obj["resolvedType"] = "API_KEY"
+            elif c_id.startswith("serviceaccount:"):
+                c_obj["resolvedName"] = f"External SA / Scanner ({c_id.split(':', 1)[1]})"
+                c_obj["resolvedType"] = "SERVICE_ACCOUNT"
+            elif c_id.startswith("oauth2:"):
+                c_obj["resolvedName"] = f"OAuth App / Workload ({c_id.split(':', 1)[1][:18]}...)"
+                c_obj["resolvedType"] = "OAUTH_CLIENT"
+            else:
+                c_obj["resolvedName"] = f"User / Default ADC ({c_id or 'default'})"
+                c_obj["resolvedType"] = "OAUTH_CLIENT"
+        creds_list.append(c_obj)
+
+    creds_list.sort(
+        key=lambda x: (x.get("estimatedCostUsd", 0.0), x.get("inferenceRequests", 0), x.get("requests", 0)),
+        reverse=True,
+    )
+    p["credentialsUsage"] = creds_list
+
+    for d_v in (p.get("dailySeries") or {}).values():
+        d_v["costUsd"] = round(float(d_v.get("costUsd", 0.0) or 0.0), 4)
+        d_v["vertexCostUsd"] = round(float(d_v.get("vertexCostUsd", 0.0) or 0.0), 4)
+        d_v["geminiCostUsd"] = round(float(d_v.get("geminiCostUsd", 0.0) or 0.0), 4)
+        d_v["otherAiCostUsd"] = round(float(d_v.get("otherAiCostUsd", 0.0) or 0.0), 4)
+
+    p["vertexGrossCostUsd"] = round(float(p.get("vertexGrossCostUsd", p.get("vertexCostUsd", 0.0)) or 0.0), 4)
+    p["vertexCacheSavingsUsd"] = round(float(p.get("vertexCacheSavingsUsd", 0.0) or 0.0), 4)
+    p["vertexCostUsd"] = round(float(p.get("vertexCostUsd", 0.0) or 0.0), 4)
+    p["geminiGrossCostUsd"] = round(float(p.get("geminiGrossCostUsd", p.get("geminiCostUsd", 0.0)) or 0.0), 4)
+    p["geminiCacheSavingsUsd"] = round(float(p.get("geminiCacheSavingsUsd", 0.0) or 0.0), 4)
+    p["geminiCostUsd"] = round(float(p.get("geminiCostUsd", 0.0) or 0.0), 4)
+    p["otherAiGrossCostUsd"] = round(float(p.get("otherAiGrossCostUsd", p.get("otherAiCostUsd", 0.0)) or 0.0), 4)
+    p["otherAiCacheSavingsUsd"] = round(float(p.get("otherAiCacheSavingsUsd", 0.0) or 0.0), 4)
+    p["otherAiCostUsd"] = round(float(p.get("otherAiCostUsd", 0.0) or 0.0), 4)
+    p["estimatedCostUsd"] = round(float(p.get("estimatedCostUsd", 0.0) or 0.0), 4)
+    p["costUsd"] = p["estimatedCostUsd"]
+
+    for k_stale in (
+        "dataResidency",
+        "finopsExtended",
+        "aiToolsSummary",
+        "agentspaceTelemetry",
+        "aiLogForensics",
+        "aiSecurityPosture",
+    ):
+        p.pop(k_stale, None)
+
+
+def reprice_cached_payload(payload: dict) -> dict:
+    """
+    Recomputes all AI costs, cached tokens, models, credentials, API keys, service accounts, users,
+    timeline and global summaries strictly from `pricingAtoms` without any network calls.
+    Legacy cached projects without `pricingAtoms` are left untouched and flagged with `pricingStale: True`.
+    """
+    if not isinstance(payload, dict):
+        return payload
+
+    projects = payload.get("projects")
+    if not isinstance(projects, list) or not any(
+        isinstance(p, dict) and isinstance(p.get("pricingAtoms"), dict) for p in projects
+    ):
+        out = copy.deepcopy(payload)
+        if not is_demo_mode() and not bool(payload.get("demo")):
+            payload["pricingStale"] = True
+            out["pricingStale"] = True
+        return out
+
+    cloned_projects = copy.deepcopy(projects)
+    fb_today, fb_yesterday = _reprice_extract_fallback_dates(payload)
+
+    for p in cloned_projects:
+        if not isinstance(p, dict):
+            continue
+        atoms = p.get("pricingAtoms")
+        if not isinstance(atoms, dict):
+            continue
+        today_str, yesterday_str = _reprice_resolve_project_dates(p, fb_today, fb_yesterday)
+        models_dict, creds_dict = _reprice_reset_project_and_collect_skeletons(p)
+        _reprice_apply_managed_atoms(p, models_dict, creds_dict, atoms.get("managed") or [])
+        _reprice_apply_gemini_atoms(p, models_dict, creds_dict, atoms.get("gemini") or [])
+        _reprice_apply_vertex_atoms(p, models_dict, creds_dict, atoms.get("vertex") or [])
+        _reprice_apply_dialogflow_atoms(p, models_dict, creds_dict, atoms.get("dialogflow") or [])
+        _reprice_reconcile_keys_sas_and_users(p, creds_dict, today_str, yesterday_str)
+        _reprice_finalize_project_totals(p, models_dict, creds_dict, today_str, yesterday_str)
+
+    rebuilt = build_scan_payload_from_projects(
+        cloned_projects,
+        int(payload.get("days", 30) or 30),
+        payload.get("auth") or {},
+        float(payload.get("elapsedSeconds", 0.0) or 0.0),
+        scanned_at=payload.get("scannedAt"),
+        sync_meta=copy.deepcopy(payload.get("sync")) if payload.get("sync") is not None else None,
+    )
+    if not rebuilt.get("timeline") and isinstance(payload.get("timeline"), list) and payload.get("timeline"):
+        rebuilt["timeline"] = [
+            {"date": d["date"], **empty_day_bucket()}
+            for d in payload["timeline"]
+            if isinstance(d, dict) and d.get("date")
+        ]
+
+    for opt_key in (
+        "fromCache",
+        "scanMode",
+        "periodStart",
+        "periodEnd",
+        "periodRange",
+        "slicedFromDays",
+        "forcedProjectId",
+        "forcedProjectResult",
+    ):
+        if opt_key in payload:
+            rebuilt[opt_key] = copy.deepcopy(payload[opt_key])
+
+    return rebuilt
+
+
+def reprice_all_cached_payloads(account_email: str, data_dir: str = None) -> dict:
+    """
+    Reprices every on-disk scan cache file for `account_email` that contains `pricingAtoms`,
+    atomically replacing each file via a temporary file + `os.replace`, and clears `RAM_PAYLOAD_CACHE`.
+    Never raises: unreadable or legacy files are left untouched and counted under `skipped`.
+    """
+    global LAST_LIVE_SCAN_RESULT
+    if is_demo_mode() or not account_email:
+        return {"repriced": 0, "skipped": 0}
+
+    target_dir = data_dir or DATA_DIR
+    if not os.path.isdir(target_dir):
+        RAM_PAYLOAD_CACHE.clear()
+        return {"repriced": 0, "skipped": 0}
+
+    safe = "".join(c if c.isalnum() else "_" for c in account_email.lower())
+    own_cache_re = re.compile(r"^scan_cache_v9_" + re.escape(safe) + r"_(\d+|range_[^_]{1,10}_[^_]{1,10})d\.json$")
+
+    repriced = 0
+    skipped = 0
+    repriced_payloads_ranked: list[tuple[tuple[int, int], dict]] = []
+
+    try:
+        entries = sorted(os.listdir(target_dir))
+    except OSError:
+        RAM_PAYLOAD_CACHE.clear()
+        return {"repriced": 0, "skipped": 0}
+
+    for fname in entries:
+        m_file = own_cache_re.match(fname)
+        if not m_file:
+            continue
+        fpath = os.path.join(target_dir, fname)
+        try:
+            with open(fpath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError, TypeError):
+            skipped += 1
+            continue
+
+        if not isinstance(data, dict):
+            skipped += 1
+            continue
+
+        auth_obj = data.get("auth")
+        owner = auth_obj.get("activeAccount") if isinstance(auth_obj, dict) else None
+        if owner and owner != account_email:
+            continue
+
+        projs = data.get("projects")
+        if (
+            not isinstance(projs, list)
+            or len(projs) == 0
+            or not any(isinstance(p, dict) and isinstance(p.get("pricingAtoms"), dict) for p in projs)
+        ):
+            skipped += 1
+            continue
+
+        try:
+            new_data = reprice_cached_payload(data)
+        except Exception:
+            skipped += 1
+            continue
+
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                dir=target_dir,
+                prefix=f".{fname}.",
+                suffix=".tmp",
+                delete=False,
+            ) as tmp_f:
+                tmp_path = tmp_f.name
+                json.dump(new_data, tmp_f, indent=2, ensure_ascii=False)
+                tmp_f.flush()
+                os.fsync(tmp_f.fileno())
+            os.replace(tmp_path, fpath)
+            tmp_path = None
+            repriced += 1
+            win_tag = m_file.group(1)
+            if win_tag == "30":
+                rank_key = (0, -30)
+            elif win_tag == "90":
+                rank_key = (1, -90)
+            elif win_tag.isdigit():
+                rank_key = (2, -int(win_tag))
+            else:
+                rank_key = (3, 0)
+            repriced_payloads_ranked.append((rank_key, new_data))
+        except Exception:
+            if tmp_path:
+                with contextlib.suppress(OSError):
+                    os.remove(tmp_path)
+            skipped += 1
+            continue
+
+    if repriced_payloads_ranked and data_dir is None and os.path.exists(SYNC_REGISTRY_FILE):
+        with contextlib.suppress(Exception):
+            reg = load_sync_registry()
+            acc_entry = (reg.get("accounts") or {}).get(account_email)
+            acc_projects = acc_entry.get("projects") if isinstance(acc_entry, dict) else None
+            if isinstance(acc_projects, dict):
+                repriced_payloads_ranked.sort(key=lambda x: x[0])
+                seen_pids: set[str] = set()
+                reg_changed = False
+                for _rk, rp_data in repriced_payloads_ranked:
+                    scanned_at = rp_data.get("scannedAt") or datetime.now(timezone.utc).isoformat()
+                    for p_obj in (rp_data.get("projects") or []):
+                        if not isinstance(p_obj, dict) or not isinstance(p_obj.get("pricingAtoms"), dict):
+                            continue
+                        pid = p_obj.get("projectId")
+                        if pid and pid not in seen_pids and pid in acc_projects:
+                            seen_pids.add(pid)
+                            update_registry_entry_from_project(
+                                acc_projects, p_obj, scanned_at, is_new=False, preserve_manual=True
+                            )
+                            reg_changed = True
+                if reg_changed:
+                    save_sync_registry(reg)
+
+    RAM_PAYLOAD_CACHE.clear()
+    if isinstance(globals().get("LAST_LIVE_SCAN_RESULT"), dict):
+        live_acc = (LAST_LIVE_SCAN_RESULT.get("auth") or {}).get("activeAccount")
+        if not live_acc or live_acc == account_email:
+            LAST_LIVE_SCAN_RESULT = None
+
+    return {"repriced": repriced, "skipped": skipped}
+
 
 

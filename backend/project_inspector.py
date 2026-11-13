@@ -114,9 +114,29 @@ def _init_project_inspection_dict(proj: dict, budgets: dict) -> dict:
         "apiKeys": [],
         "serviceAccounts": [],
         "dailySeries": {},
+        "pricingAtomsVersion": 1,
+        "pricingAtoms": {
+            "vertex": [],
+            "gemini": [],
+            "managed": [],
+            "dialogflow": [],
+        },
         "budgetUsd": budgets.get("projects", {}).get(pid, {}).get("budgetUsd", 100.0),
         "blocked": budgets.get("projects", {}).get(pid, {}).get("blocked", False)
     }
+
+
+def _ensure_project_pricing_atoms(result: dict) -> dict:
+    result.setdefault("pricingAtomsVersion", 1)
+    atoms = result.setdefault("pricingAtoms", {"vertex": [], "gemini": [], "managed": [], "dialogflow": []})
+    if not isinstance(atoms, dict):
+        atoms = {"vertex": [], "gemini": [], "managed": [], "dialogflow": []}
+        result["pricingAtoms"] = atoms
+    else:
+        for k in ("vertex", "gemini", "managed", "dialogflow"):
+            if not isinstance(atoms.get(k), list):
+                atoms[k] = []
+    return atoms
 
 
 def _mark_transient_scan_error(result: dict, step: str, status: int | None):
@@ -446,23 +466,63 @@ def _prefetch_project_monitoring_metrics(
     return mon_results
 
 
-def _apply_managed_ai_service_point(
-    result: dict, c_entry: dict, p_day: dict, c_day: dict,
-    service: str, method: str, loc: str, end_t: str, val: int
-):
+def managed_call_price(service: str, method: str, calls: int) -> tuple[float, float, int, int, str, str]:
+    """(gross USD, savings USD, input tokens, output tokens, model label, cost source) for per-call managed AI services."""
     unit_cost, unit_in_tok, unit_out_tok, svc_model_id, svc_cost_src = estimate_service_call_cost(service, method)
     if unit_cost <= 0 and unit_in_tok <= 0:
-        return
-    est_in = val * unit_in_tok
-    est_out = val * unit_out_tok
-    est_tot = est_in + est_out
-    est_gross = val * unit_cost
-    if service in ("discoveryengine.googleapis.com", "cloudaicompanion.googleapis.com", "geminicloudassist.googleapis.com", "dialogflow.googleapis.com", "ces.googleapis.com"):
+        return (0.0, 0.0, 0, 0, "", "")
+    n = int(calls)
+    est_in = n * unit_in_tok
+    est_out = n * unit_out_tok
+    est_gross = n * unit_cost
+    if service in (
+        "discoveryengine.googleapis.com",
+        "cloudaicompanion.googleapis.com",
+        "geminicloudassist.googleapis.com",
+        "dialogflow.googleapis.com",
+        "ces.googleapis.com",
+    ):
         bs_ms = get_billing_settings()
         sav_ratio = max(0.0, min(1.0, float(bs_ms.get("managedServiceSavingsPct", 0.0) or 0.0) / 100.0))
         est_sav = est_gross * sav_ratio
     else:
         est_sav = 0.0
+    return (est_gross, est_sav, est_in, est_out, svc_model_id, svc_cost_src)
+
+
+def _apply_managed_ai_service_point(
+    result: dict, c_entry: dict, p_day: dict, c_day: dict,
+    service: str, method: str, loc: str, end_t: str, val: int
+):
+    atoms = _ensure_project_pricing_atoms(result)
+    est_gross, est_sav, est_in, est_out, svc_model_id, svc_cost_src = managed_call_price(service, method, val)
+    if not svc_model_id and est_gross <= 0 and est_in <= 0:
+        return
+    if val > 0:
+        cred_id = str(c_entry.get("credentialId") or "unknown")
+        loc_clean = loc or "global"
+        day_clean = str(end_t or "")[:10]
+        m_list = atoms["managed"]
+        for rec in m_list:
+            if (
+                rec.get("c") == cred_id
+                and rec.get("svc") == service
+                and rec.get("meth") == method
+                and rec.get("loc") == loc_clean
+                and rec.get("d") == day_clean
+            ):
+                rec["n"] += int(val)
+                break
+        else:
+            m_list.append({
+                "c": cred_id,
+                "svc": service,
+                "meth": method,
+                "loc": loc_clean,
+                "d": day_clean,
+                "n": int(val),
+            })
+    est_tot = est_in + est_out
     # Per-call services are billed per request: no cached-token share is estimated for them
     est_cache_tok = 0
     est_cost = est_gross - est_sav
@@ -755,6 +815,7 @@ def _process_gemini_api_payload_bytes(
     mon_results: dict, pid: str, token: str, start_iso: str, end_iso: str,
     can_read_monitoring: bool, gemini_ok_calls_map: dict, result: dict
 ):
+    atoms = _ensure_project_pricing_atoms(result)
     if not can_read_monitoring or (result["geminiApiRequests"] <= 0 and len(gemini_ok_calls_map) == 0):
         return
     req_b_filter = 'metric.type="serviceruntime.googleapis.com/api/request_sizes" AND resource.labels.service="generativelanguage.googleapis.com"'
@@ -810,7 +871,6 @@ def _process_gemini_api_payload_bytes(
                 resp_bytes_map[g_key] = resp_bytes_map.get(g_key, 0) + b_tot
 
     all_g_keys = sorted(set(gemini_ok_calls_map.keys()) | set(req_bytes_map.keys()) | set(resp_bytes_map.keys()))
-    gemini_credit_ratio = _gemini_api_credit_discount_ratio()
 
     # Exact per-model token counts from Cloud Monitoring: output metric + paid-tier input quota metrics.
     # (Cached tokens are NOT separated by Google: they come from geminiApiCacheHitRatioPct settings.)
@@ -874,6 +934,7 @@ def _process_gemini_api_payload_bytes(
                 if is_free:
                     cached_tok = 0
                     gross_usd = 0.0
+                    _sav = 0.0
                     result["geminiFreeTierDetected"] = True
                 else:
                     cached_tok, gross_usd, _sav = gemini_api_token_price(model_lbl, in_tok, out_tok)
@@ -882,8 +943,9 @@ def _process_gemini_api_payload_bytes(
                     "calls": int(round(calls * m_share)),
                     "req_b": int(round(req_b * m_share)), "resp_b": int(round(resp_b * m_share)),
                     "in_tok": in_tok, "out_tok": out_tok, "cached_tok": cached_tok,
-                    "gross_usd": gross_usd, "cache_sav_usd": gross_usd * gemini_credit_ratio,
+                    "gross_usd": gross_usd, "cache_sav_usd": _sav,
                     "gm_id": f"{model_lbl} (Gemini API)",
+                    "price_model": model_lbl,
                     "cost_src": "GEMINI_API_FREE_TIER" if is_free else "GEMINI_API_TOKEN_METRICS",
                     "free_tier": is_free,
                 })
@@ -914,17 +976,53 @@ def _process_gemini_api_payload_bytes(
         entries.append({
             "cred_id": cred_id, "short_m": short_m, "loc": loc, "end_t": end_t, "calls": calls,
             "req_b": req_b, "resp_b": resp_b, "in_tok": in_tok, "out_tok": out_tok, "cached_tok": cached_tok,
-            "gross_usd": gross_usd, "cache_sav_usd": cache_sav_usd, "gm_id": gm_id, "cost_src": cost_src,
+            "gross_usd": gross_usd, "cache_sav_usd": cache_sav_usd, "gm_id": gm_id,
+            "price_model": GEMINI_API_FALLBACK_MODEL, "cost_src": cost_src,
             "free_tier": False,
         })
 
+    g_list = atoms["gemini"]
     for e in entries:
         cred_id, short_m, loc, end_t = e["cred_id"], e["short_m"], e["loc"], e["end_t"]
         calls, req_b, resp_b = e["calls"], e["req_b"], e["resp_b"]
         in_tok, out_tok, cached_tok = e["in_tok"], e["out_tok"], e["cached_tok"]
         gross_usd, cache_sav_usd = e["gross_usd"], e["cache_sav_usd"]
         gm_id, cost_src = e["gm_id"], e["cost_src"]
+        price_model = e["price_model"]
         free_tier = bool(e.get("free_tier"))
+        for rec in g_list:
+            if (
+                rec.get("c") == cred_id
+                and rec.get("m") == price_model
+                and rec.get("gm") == gm_id
+                and rec.get("loc") == loc
+                and rec.get("sm") == short_m
+                and rec.get("d") == end_t
+                and bool(rec.get("free")) == free_tier
+                and rec.get("src") == cost_src
+            ):
+                rec["i"] += int(in_tok)
+                rec["o"] += int(out_tok)
+                rec["calls"] += int(calls)
+                rec["rb"] += int(req_b)
+                rec["rsb"] += int(resp_b)
+                break
+        else:
+            g_list.append({
+                "c": cred_id,
+                "m": price_model,
+                "gm": gm_id,
+                "loc": loc,
+                "sm": short_m,
+                "d": end_t,
+                "i": int(in_tok),
+                "o": int(out_tok),
+                "calls": int(calls),
+                "rb": int(req_b),
+                "rsb": int(resp_b),
+                "free": free_tier,
+                "src": cost_src,
+            })
         net_usd = gross_usd - cache_sav_usd
         tot_tok = in_tok + out_tok
         from_bytes = cost_src == "GEMINI_API_PAYLOAD_BYTES"
@@ -1053,10 +1151,40 @@ def _apply_vertex_token_share_to_credential(c: dict, c_day: dict, v_day: dict, s
     c["costSource"] = "VERTEX_TOKENS" if c["costSource"] in ("NONE", "VERTEX_TOKENS") else "VERTEX_AND_MANAGED_AI"
 
 
+def vertex_token_price(
+    model_id: str, location: str, tok_type: str, val: int, rates: dict = None
+) -> tuple[float, float, int]:
+    """(gross USD, credit savings USD, cached tokens) for a Vertex AI token_count sample."""
+    if rates is None:
+        rates = get_model_rates(model_id, location=location)
+    cache_ratio = max(0.0, min(0.98, float(rates.get("implicitCacheHitRatioPct", 0.0)) / 100.0))
+    credit_disc_ratio = max(0.0, min(0.95, float(rates.get("billingCreditDiscountPct", 0.0)) / 100.0))
+    tt = (tok_type or "input").lower()
+    if "cache" in tt:
+        gross = (val / 1_000_000.0) * rates["cache_read_input"]
+        cached_tok = int(val)
+    elif "output" in tt or "candidate" in tt:
+        gross = (val / 1_000_000.0) * rates["output"]
+        cached_tok = 0
+    elif "think" in tt:
+        gross = (val / 1_000_000.0) * rates["thinking"]
+        cached_tok = 0
+    else:
+        cached_tok = int(round(val * cache_ratio))
+        uncached_tok = max(0, int(val) - cached_tok)
+        gross = (
+            ((uncached_tok / 1_000_000.0) * rates["input"]) +
+            ((cached_tok / 1_000_000.0) * rates["cache_read_input"])
+        )
+    savings = gross * credit_disc_ratio
+    return (gross, savings, cached_tok)
+
+
 def _process_vertex_tokens_and_invocations(
     mon_results: dict, pid: str, token: str, start_iso: str, end_iso: str,
     can_read_monitoring: bool, su_status: int, active_locations_seen: set, result: dict
 ):
+    atoms = _ensure_project_pricing_atoms(result)
     vertex_daily_tokens = {}
     if can_read_monitoring and (result["vertexEnabled"] or su_status != 200):
         tok_filter = 'metric.type="aiplatform.googleapis.com/publisher/online_serving/token_count"'
@@ -1067,6 +1195,7 @@ def _process_vertex_tokens_and_invocations(
         )
 
         has_ew3 = ("europe-west3" in active_locations_seen)
+        vertex_atoms_agg: dict[tuple[str, str, str, str, str], int] = {}
         for ts in tok_series:
             r_labels = ts.get("resource", {}).get("labels", {})
             m_labels = ts.get("metric", {}).get("labels", {})
@@ -1079,8 +1208,6 @@ def _process_vertex_tokens_and_invocations(
 
             loc_display = "eu (europe-west3 Regional)" if (location == "eu" and has_ew3) else location
             rates = get_model_rates(model_id, location=location)
-            cache_ratio = max(0.0, min(0.98, float(rates.get("implicitCacheHitRatioPct", 0.0)) / 100.0))
-            credit_disc_ratio = max(0.0, min(0.95, float(rates.get("billingCreditDiscountPct", 0.0)) / 100.0))
             pts_sum = 0
 
             m_entry = result["models"].setdefault(model_id, _new_model_usage_entry(model_id))
@@ -1094,24 +1221,11 @@ def _process_vertex_tokens_and_invocations(
                     continue
                 pts_sum += val
                 end_t = pt.get("interval", {}).get("endTime", "")[:10]
-                if "cache" in tok_type:
-                    pt_gross = (val / 1_000_000.0) * rates["cache_read_input"]
-                    pt_cache_tok = val
-                elif "output" in tok_type or "candidate" in tok_type:
-                    pt_gross = (val / 1_000_000.0) * rates["output"]
-                    pt_cache_tok = 0
-                elif "think" in tok_type:
-                    pt_gross = (val / 1_000_000.0) * rates["thinking"]
-                    pt_cache_tok = 0
-                else:
-                    pt_cache_tok = int(round(val * cache_ratio))
-                    uncached_tok = max(0, val - pt_cache_tok)
-                    pt_gross = (
-                        ((uncached_tok / 1_000_000.0) * rates["input"]) +
-                        ((pt_cache_tok / 1_000_000.0) * rates["cache_read_input"])
-                    )
-
-                pt_sav = pt_gross * credit_disc_ratio
+                v_atom_k = (model_id, location, loc_display, tok_type, end_t)
+                vertex_atoms_agg[v_atom_k] = vertex_atoms_agg.get(v_atom_k, 0) + val
+                pt_gross, pt_sav, pt_cache_tok = vertex_token_price(
+                    model_id, location, tok_type, val, rates=rates
+                )
                 pt_cost = pt_gross - pt_sav
 
                 if end_t:
@@ -1153,32 +1267,25 @@ def _process_vertex_tokens_and_invocations(
             if pts_sum <= 0:
                 continue
 
+            gross_piece, sav_piece, est_cached_sum = vertex_token_price(
+                model_id, location, tok_type, pts_sum, rates=rates
+            )
+            cost_piece = gross_piece - sav_piece
+
             if "cache" in tok_type:
-                m_entry["cachedTokens"] += pts_sum
-                result["cachedTokens"] += pts_sum
-                gross_piece = (pts_sum / 1_000_000.0) * rates["cache_read_input"]
+                m_entry["cachedTokens"] += est_cached_sum
+                result["cachedTokens"] += est_cached_sum
             elif "output" in tok_type or "candidate" in tok_type:
                 m_entry["outputTokens"] += pts_sum
                 result["outputTokens"] += pts_sum
-                gross_piece = (pts_sum / 1_000_000.0) * rates["output"]
             elif "think" in tok_type:
                 m_entry["thinkingTokens"] += pts_sum
                 result["thinkingTokens"] += pts_sum
-                gross_piece = (pts_sum / 1_000_000.0) * rates["thinking"]
             else:
-                est_cached_sum = int(round(pts_sum * cache_ratio))
-                uncached_sum = max(0, pts_sum - est_cached_sum)
                 m_entry["inputTokens"] += pts_sum
                 m_entry["cachedTokens"] += est_cached_sum
                 result["inputTokens"] += pts_sum
                 result["cachedTokens"] += est_cached_sum
-                gross_piece = (
-                    ((uncached_sum / 1_000_000.0) * rates["input"]) +
-                    ((est_cached_sum / 1_000_000.0) * rates["cache_read_input"])
-                )
-
-            sav_piece = gross_piece * credit_disc_ratio
-            cost_piece = gross_piece - sav_piece
 
             m_entry["totalTokens"] += pts_sum
             m_entry["grossCostUsd"] = m_entry.get("grossCostUsd", 0.0) + gross_piece
@@ -1189,6 +1296,28 @@ def _process_vertex_tokens_and_invocations(
             result["vertexCacheSavingsUsd"] += sav_piece
             result["vertexCostUsd"] += cost_piece
             result["estimatedCostUsd"] += cost_piece
+
+        v_list = atoms["vertex"]
+        for (v_m, v_loc, v_ld, v_t, v_d), val_sum in vertex_atoms_agg.items():
+            for rec in v_list:
+                if (
+                    rec.get("m") == v_m
+                    and rec.get("loc") == v_loc
+                    and rec.get("ld") == v_ld
+                    and rec.get("t") == v_t
+                    and rec.get("d") == v_d
+                ):
+                    rec["v"] += int(val_sum)
+                    break
+            else:
+                v_list.append({
+                    "m": v_m,
+                    "loc": v_loc,
+                    "ld": v_ld,
+                    "t": v_t,
+                    "d": v_d,
+                    "v": int(val_sum),
+                })
 
         inv_series = mon_results.get("vertex_inv") if "vertex_inv" in mon_results else fetch_monitoring_timeseries(
             pid, token, inv_filter, start_iso, end_iso,
@@ -1257,11 +1386,26 @@ def _process_vertex_tokens_and_invocations(
                 _apply_vertex_token_share_to_credential(c, c_day, v_day, c_w / float(total_proj_vertex_inf))
 
 
+def dialogflow_token_price(base_model: str, val: int) -> tuple[float, float, int, int]:
+    """(gross USD, managed savings USD, input tokens, output tokens) for Dialogflow CX LLM tokens."""
+    bm = base_model or "gemini-2.5-flash"
+    rates = get_model_rates(bm)
+    blended_rate_per_1m = (0.82 * rates["input"]) + (0.18 * rates["output"])
+    bs_df = get_billing_settings()
+    sav_ratio = max(0.0, min(1.0, float(bs_df.get("managedServiceSavingsPct", 0.0) or 0.0) / 100.0))
+    in_tok = int(round(val * 0.82))
+    out_tok = int(val) - in_tok
+    gross = (val / 1_000_000.0) * blended_rate_per_1m
+    savings = gross * sav_ratio
+    return (gross, savings, in_tok, out_tok)
+
+
 def _process_dialogflow_llm_tokens(
     mon_results: dict, pid: str, token: str, start_iso: str, end_iso: str,
     can_read_monitoring: bool, enabled_services_set: set, su_status: int,
     active_locations_seen: set, features_map: dict, result: dict
 ):
+    atoms = _ensure_project_pricing_atoms(result)
     if not can_read_monitoring or not ("dialogflow.googleapis.com" in enabled_services_set or "ces.googleapis.com" in enabled_services_set or su_status != 200):
         return
     df_tok_metrics = [
@@ -1279,10 +1423,7 @@ def _process_dialogflow_llm_tokens(
         )
     ]
     df_daily_tokens = {}
-    # Stessa impostazione dei servizi gestiti (A4): risparmio 0-100% (100 = non addebitato).
-    # Le tariffe restano quelle stimate del modello, senza sconto Vertex (applicato solo ai token Vertex).
-    bs_df = get_billing_settings()
-    sav_ratio = max(0.0, min(1.0, float(bs_df.get("managedServiceSavingsPct", 0.0) or 0.0) / 100.0))
+    df_atoms_agg: dict[tuple[str, str, str, str], int] = {}
 
     for m_key_df, m_filter, grp_fields, loc_key in df_tok_metrics:
         df_series = mon_results.get(m_key_df) if m_key_df in mon_results else fetch_monitoring_timeseries(
@@ -1296,8 +1437,6 @@ def _process_dialogflow_llm_tokens(
             if loc:
                 active_locations_seen.add(loc)
 
-            rates = get_model_rates(base_model)
-            blended_rate_per_1m = (0.82 * rates["input"]) + (0.18 * rates["output"])
             df_model_label = f"{base_model} (Dialogflow CX Playbook LLM)"
 
             m_entry = result["models"].setdefault(
@@ -1312,10 +1451,9 @@ def _process_dialogflow_llm_tokens(
                     continue
                 pts_sum += val
                 end_t = pt.get("interval", {}).get("endTime", "")[:10]
-                in_tok = int(round(val * 0.82))
-                out_tok = val - in_tok
-                pt_gross = (val / 1_000_000.0) * blended_rate_per_1m
-                pt_sav = pt_gross * sav_ratio
+                df_atom_k = (m_key_df, base_model, loc, end_t)
+                df_atoms_agg[df_atom_k] = df_atoms_agg.get(df_atom_k, 0) + val
+                pt_gross, pt_sav, in_tok, out_tok = dialogflow_token_price(base_model, val)
                 pt_cost = pt_gross - pt_sav
                 pt_cache = 0  # per-call billing: no cached-token share
                 est_calls = max(1, int(round(val / 3500.0)))
@@ -1358,10 +1496,7 @@ def _process_dialogflow_llm_tokens(
             if pts_sum <= 0:
                 continue
 
-            tot_in = int(round(pts_sum * 0.82))
-            tot_out = pts_sum - tot_in
-            tot_gross = (pts_sum / 1_000_000.0) * blended_rate_per_1m
-            tot_sav = tot_gross * sav_ratio
+            tot_gross, tot_sav, tot_in, tot_out = dialogflow_token_price(base_model, pts_sum)
             tot_cost = tot_gross - tot_sav
             tot_cache = 0
             tot_est_calls = max(1, int(round(pts_sum / 3500.0)))
@@ -1404,7 +1539,7 @@ def _process_dialogflow_llm_tokens(
             df_llm_feat["methods"].add(f"LLM:{base_model}")
             df_llm_feat["locations"].add(loc)
 
-    if not df_daily_tokens:
+    if not df_daily_tokens and not df_atoms_agg:
         return
     df_creds = [
         c for c in result["credentialsUsage"].values()
@@ -1443,6 +1578,33 @@ def _process_dialogflow_llm_tokens(
         df_creds = [synth_c]
 
     total_df_reqs = sum(max(1, c.get("inferenceRequests", 0) or c.get("requests", 0)) for c in df_creds)
+    df_list = atoms["dialogflow"]
+    for (m_key_df, base_model, loc, end_t), val_sum in df_atoms_agg.items():
+        for c in df_creds:
+            cred_id = str(c.get("credentialId") or "dialogflow-cx:playbook-llm-runtime")
+            weight = max(1, c.get("inferenceRequests", 0) or c.get("requests", 0)) / float(total_df_reqs)
+            for rec in df_list:
+                if (
+                    rec.get("c") == cred_id
+                    and rec.get("m") == base_model
+                    and rec.get("loc") == loc
+                    and rec.get("mk") == m_key_df
+                    and rec.get("d") == end_t
+                ):
+                    rec["v"] += int(val_sum)
+                    rec["w"] = float(weight)
+                    break
+            else:
+                df_list.append({
+                    "c": cred_id,
+                    "m": base_model,
+                    "loc": loc,
+                    "mk": m_key_df,
+                    "d": end_t,
+                    "v": int(val_sum),
+                    "w": float(weight),
+                })
+
     for day_str, d_day in df_daily_tokens.items():
         for c in df_creds:
             weight = max(1, c.get("inferenceRequests", 0) or c.get("requests", 0)) / float(total_df_reqs)

@@ -52,6 +52,9 @@ IGNORE_EXACT = {
     # legacy Italian texts saved by older versions, mapped to English when the registry is loaded (sync_registry.py)
     "Nessuna API AI abilitata",
     "Nessun dato AI rilevato (0 costi, 0 token, 0 risorse)",
+    # Google Cloud Console CSV export column headers when downloaded in Italian locale (billing_calibration.py)
+    "descrizione servizio", "id servizio", "descrizione sku", "quantità di utilizzo",
+    "costo di listino", "risparmi negoziati", "altri risparmi", "subtotale", "costo",
 }
 
 

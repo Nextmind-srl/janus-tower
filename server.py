@@ -15,6 +15,7 @@ BACKEND_MODULES = [
     "backend/project_inspector.py",
     "backend/security_posture.py",
     "backend/sync_registry.py",
+    "backend/billing_calibration.py",
     "backend/http_routes.py",
 ]
 
@@ -121,11 +122,14 @@ def assemble_frontend_html(base_dir: str = None, write_to_disk: bool = True) -> 
         index_path = os.path.join(base_dir, "index.html")
         try:
             existing = ""
+            has_crlf = False
             if os.path.exists(index_path):
-                with open(index_path, "r", encoding="utf-8") as f:
-                    existing = f.read()
-            if existing != assembled:
-                with open(index_path, "w", encoding="utf-8") as f:
+                with open(index_path, "rb") as fb:
+                    raw_existing = fb.read()
+                has_crlf = b"\r\n" in raw_existing
+                existing = raw_existing.decode("utf-8", errors="replace")
+            if existing != assembled or has_crlf:
+                with open(index_path, "w", encoding="utf-8", newline="\n") as f:
                     f.write(assembled)
         except Exception as e:
             sys.stderr.write(f"[WARN] Unable to update index.html on disk: {e}\n")

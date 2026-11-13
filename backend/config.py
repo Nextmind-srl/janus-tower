@@ -644,6 +644,29 @@ def _build_default_models_pricing_config() -> dict:
             "publisherModelsApi": "https://aiplatform.googleapis.com/v1beta1/publishers/google/models",
         },
         "billingSettings": dict(DEFAULT_BILLING_SETTINGS),
+        "billingCalibration": (
+            build_default_billing_calibration()
+            if "build_default_billing_calibration" in globals()
+            else {
+                "activeSource": "DEFAULT_LIST_PRICES",
+                "manualOverride": False,
+                "bigqueryAutoSync": False,
+                "bigqueryStatus": "NOT_CHECKED",
+                "bigqueryCheckedAt": None,
+                "billingExportTable": "",
+                "discoveredTable": "",
+                "jobProject": "",
+                "deniedTargets": [],
+                "bigqueryMessage": "BigQuery Billing Export has not been checked yet. Run a scan, sync model rates, or click 'Detect & Calibrate from BigQuery'.",
+                "calibratedAt": None,
+                "csvFiles": [],
+                "windowDays": 30,
+                "rowCount": 0,
+                "derivedSettings": {},
+                "perModelGeminiCacheCount": 0,
+                "notes": [],
+            }
+        ),
         "oauthClientOwners": dict(DEFAULT_OAUTH_CLIENT_OWNERS),
         "lastApiSync": {
             "syncedAt": None,
@@ -677,6 +700,16 @@ def load_models_pricing_config() -> dict:
                 if isinstance(loaded.get("oauthClientOwners"), dict):
                     oc.update(loaded["oauthClientOwners"])
                 loaded["oauthClientOwners"] = oc
+                had_cal = isinstance(loaded.get("billingCalibration"), dict)
+                if "normalize_billing_calibration_block" in globals():
+                    loaded["billingCalibration"] = normalize_billing_calibration_block(loaded.get("billingCalibration"), bs)
+                else:
+                    cal_def = dict(default_cfg["billingCalibration"])
+                    if had_cal:
+                        cal_def.update(loaded["billingCalibration"])
+                    loaded["billingCalibration"] = cal_def
+                if not had_cal:
+                    upgraded = True
                 if not isinstance(loaded.get("lastApiSync"), dict):
                     loaded["lastApiSync"] = dict(default_cfg["lastApiSync"])
                     upgraded = True
@@ -742,6 +775,28 @@ def sanitize_models_pricing_config_for_http(cfg: dict) -> dict:
 def get_billing_settings() -> dict:
     cfg = load_models_pricing_config()
     return cfg.get("billingSettings") or dict(DEFAULT_BILLING_SETTINGS)
+
+
+def get_billing_calibration_summary(cfg: dict = None) -> dict:
+    """Returns normalized billingCalibration metadata plus active billing settings for UI indicators."""
+    if cfg is None:
+        cfg = load_models_pricing_config()
+    bs = (cfg or {}).get("billingSettings") or dict(DEFAULT_BILLING_SETTINGS)
+    raw_cal = (cfg or {}).get("billingCalibration")
+    if "normalize_billing_calibration_block" in globals():
+        cal = dict(normalize_billing_calibration_block(raw_cal, bs))
+    elif isinstance(raw_cal, dict):
+        cal = dict(raw_cal)
+    else:
+        cal = dict(_build_default_models_pricing_config()["billingCalibration"])
+    cal["activeSettings"] = {
+        "vertexBillingCreditDiscountPct": float(bs.get("vertexBillingCreditDiscountPct", 0.0) or 0.0),
+        "geminiApiBillingCreditDiscountPct": float(bs.get("geminiApiBillingCreditDiscountPct", 0.0) or 0.0),
+        "vertexImplicitCacheHitRatioPct": float(bs.get("vertexImplicitCacheHitRatioPct", 93.0) if bs.get("vertexImplicitCacheHitRatioPct") is not None else 93.0),
+        "geminiApiImplicitCacheHitRatioPct": float(bs.get("geminiApiImplicitCacheHitRatioPct", 0.0) or 0.0),
+        "regionalMultiplierDefault": float(bs.get("regionalMultiplierDefault", 1.10) or 1.10),
+    }
+    return cal
 
 
 def get_usd_to_eur_rate() -> float:
@@ -1627,6 +1682,33 @@ def validate_and_apply_models_pricing_update(req: dict) -> tuple[bool, str | Non
 
     cfg = load_models_pricing_config()
     now_iso = datetime.now(timezone.utc).isoformat()
+    bs_before = dict(cfg.get("billingSettings") or DEFAULT_BILLING_SETTINGS)
+
+    if "bigqueryAutoSync" in req:
+        if not isinstance(req.get("bigqueryAutoSync"), bool):
+            return False, "bigqueryAutoSync must be true or false.", None
+        cal_auto = cfg.setdefault("billingCalibration", dict(_build_default_models_pricing_config()["billingCalibration"]))
+        cal_auto["bigqueryAutoSync"] = req["bigqueryAutoSync"]
+
+    if "billingExportTable" in req:
+        raw_tbl = req.get("billingExportTable")
+        if raw_tbl is not None and not isinstance(raw_tbl, str):
+            return False, "billingExportTable must be a string.", None
+        tbl_str = str(raw_tbl or "").strip()
+        if tbl_str:
+            if "parse_bigquery_table_ref" in globals():
+                parsed_tbl = parse_bigquery_table_ref(tbl_str)
+                if not parsed_tbl:
+                    return (
+                        False,
+                        "Invalid BigQuery table reference. Expected format: project_id.dataset_id.gcp_billing_export_v1_XXXXXX",
+                        None,
+                    )
+                tbl_str = f"{parsed_tbl[0]}.{parsed_tbl[1]}.{parsed_tbl[2]}"
+            elif len(tbl_str) > 320:
+                return False, "billingExportTable exceeds maximum length.", None
+        cal_blk = cfg.setdefault("billingCalibration", dict(_build_default_models_pricing_config()["billingCalibration"]))
+        cal_blk["billingExportTable"] = tbl_str
 
     if "billingSettings" in req:
         raw_bs = req.get("billingSettings")
@@ -1647,6 +1729,31 @@ def validate_and_apply_models_pricing_update(req: dict) -> tuple[bool, str | Non
             if not isinstance(raw_bs["usdToEurRateAuto"], bool):
                 return False, "usdToEurRateAuto must be true or false.", None
             bs_target["usdToEurRateAuto"] = raw_bs["usdToEurRateAuto"]
+
+        cal_blk = cfg.setdefault("billingCalibration", dict(_build_default_models_pricing_config()["billingCalibration"]))
+        if req.get("resetBillingSettings") is True:
+            cal_blk["activeSource"] = "DEFAULT_LIST_PRICES"
+            cal_blk["manualOverride"] = False
+            cal_blk["calibratedAt"] = None
+            cal_blk["csvFiles"] = []
+            cal_blk["derivedSettings"] = {}
+        else:
+            cal_keys = (
+                "vertexBillingCreditDiscountPct",
+                "geminiApiBillingCreditDiscountPct",
+                "vertexImplicitCacheHitRatioPct",
+                "geminiApiImplicitCacheHitRatioPct",
+                "regionalMultiplierDefault",
+                "managedServiceSavingsPct",
+            )
+            changed_cal = any(
+                k_c in raw_bs and abs(float(bs_target.get(k_c, 0.0) or 0.0) - float(bs_before.get(k_c, 0.0) or 0.0)) > 1e-6
+                for k_c in cal_keys
+            )
+            if changed_cal:
+                cal_blk["activeSource"] = "MANUAL"
+                cal_blk["manualOverride"] = True
+                cal_blk["calibratedAt"] = now_iso
 
     reg_mult = float(cfg.get("billingSettings", {}).get("regionalMultiplierDefault", 1.10) or 1.10)
     models_map = cfg.setdefault("models", {})

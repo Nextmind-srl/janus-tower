@@ -8,7 +8,7 @@
 
 JanusTower is a **local, single-user, read-only** web app (Python 3.11+ backend + single-page frontend) that inspects the Google Cloud projects visible to the signed-in user and shows:
 
-1. **AI FinOps (estimated)**: calls and tokens from Cloud Monitoring (`aiplatform.googleapis.com`, `generativelanguage.googleapis.com`) multiplied by the price table `MODEL_PRICING_PER_1M` in `backend/config.py`. There is **no** BigQuery billing export or invoice CSV reconciliation (roadmap).
+1. **AI FinOps (estimated)**: calls and tokens from Cloud Monitoring (`aiplatform.googleapis.com`, `generativelanguage.googleapis.com`) multiplied by the price table `MODEL_PRICING_PER_1M` in `backend/config.py`. Discounts and cache ratios can be calibrated from the BigQuery billing export (`backend/billing_calibration.py`, opt-in: a billable query job, automatic runs only if `billingCalibration.bigqueryAutoSync` is true, default false) or a Billing CSV upload; there is no line-by-line invoice reconciliation (roadmap).
 2. **Identity & Shadow AI attribution**: Cloud Audit Logs correlated with API keys, service accounts, OAuth workloads and human users.
 3. **Agents & Gemini Enterprise** (`backend/gemini_enterprise.py`): Agentspace apps, data stores, connectors, licenses, session metadata, Reasoning Engines, Dialogflow CX, Agent Registry (agents and MCP servers); plus an on-demand read-only REST probe (`GET /api/gemini-enterprise/inspect`). There is **no** live MCP JSON-RPC inspector (roadmap).
 4. **AI security posture** (`backend/security_posture.py`): 0–100 score, findings, `gcloud` remediation commands, Model Armor, data residency (EU vs non-EU).

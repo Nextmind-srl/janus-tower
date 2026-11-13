@@ -215,6 +215,7 @@
     const SANITIZE_ALLOWED_ATTRS = new Set([
       'class', 'id', 'style', 'title', 'role', 'tabindex', 'lang', 'dir', 'hidden', 'inert',
       'alt', 'href', 'src', 'rel', 'target', 'type', 'value', 'checked', 'disabled', 'selected', 'readonly',
+      'accept', 'multiple',
       'placeholder', 'name', 'for', 'min', 'max', 'step', 'rows', 'cols', 'colspan', 'rowspan', 'scope', 'open',
       'maxlength', 'autocomplete', 'width', 'height', 'viewbox', 'preserveaspectratio', 'xmlns', 'xlink:href',
       'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'fill-rule',
@@ -714,6 +715,9 @@
         });
         const data = await res.json();
         updateAuthFlagsFromStatus(data);
+        if (data.billingCalibration) {
+          lastKnownBillingCalibration = data.billingCalibration;
+        }
         if (data.auth) {
           if (data.auth.sessionToken) {
             saveBrowserSessionSid(data.auth.sessionToken);
@@ -725,6 +729,7 @@
           }
           updateAuthUI(data.auth);
         }
+        updateHeaderBillingWarningUi(data.billingCalibration || null);
         if (data.auth && data.auth.tokenValid) {
           closeLoginScreen();
           // Restore period, custom dates and active tab after F5
@@ -1102,11 +1107,15 @@
         if (dot) dot.style.background = 'var(--jt-success)';
         banner.classList.add('hidden');
         if (!loginScreenOpenedManually) closeLoginScreen();
+        if (typeof updateHeaderBillingWarningUi === 'function') updateHeaderBillingWarningUi();
       } else {
         if (dot) dot.style.background = 'var(--jt-warning)';
         banner.classList.remove('hidden');
         if (bannerMsg) bannerMsg.textContent = 'Sign in to view data.';
         globalScanData = null;
+        lastKnownBillingCalibration = null;
+        updatePricingStaleBanner();
+        if (typeof updateHeaderBillingWarningUi === 'function') updateHeaderBillingWarningUi(null);
         setHeaderTotalCostDisplay(0);
         openLoginScreen(false);
       }
@@ -1141,6 +1150,9 @@
       const authHeaders = getBrowserAuthHeaders();
       clearBrowserAccountSession();
       globalScanData = null;
+      lastKnownBillingCalibration = null;
+      updatePricingStaleBanner();
+      updateHeaderBillingWarningUi(null);
       setHeaderTotalCostDisplay(0);
       try {
         // The demo session lives on the server and cannot be closed (the endpoint answers 403): only this browser is detached,
@@ -1189,6 +1201,7 @@
           return;
         }
         globalScanData = null;
+        updatePricingStaleBanner();
         setHeaderTotalCostDisplay(0);
         const pTbody = document.getElementById('projects-tbody');
         if (pTbody) setSafeHtml(pTbody, `<tr><td colspan="8" class="py-10 text-center text-slate-400">Local data deleted. Run a new scan to load data again.</td></tr>`);
@@ -1376,8 +1389,10 @@
       const btnSyncSmartLbl = document.getElementById('btn-sync-scan-smart-label');
       const btnSyncFull = document.getElementById('btn-sync-scan-full');
       const btnSyncFullLbl = document.getElementById('btn-sync-scan-full-label');
+      const btnPricingStale = document.getElementById('btn-pricing-stale-scan');
 
       if (btn) btn.disabled = Boolean(locked);
+      if (btnPricingStale) btnPricingStale.disabled = Boolean(locked);
       if (icon) icon.classList.toggle('animate-spin', Boolean(locked));
       const normalizedLbl = (!locked && (!labelText || labelText === 'Scan Active')) ? 'Scan' : (labelText || (locked ? 'Scanning...' : 'Scan'));
       if (lbl) lbl.textContent = normalizedLbl;
@@ -1592,8 +1607,137 @@
       updateAuthUI(auth);
     }
 
+    function updatePricingStaleBanner() {
+      const banner = document.getElementById('pricing-stale-banner');
+      if (!banner) return;
+      if (Boolean(globalScanData && globalScanData.pricingStale) && currentTab === 'dashboard') {
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+    }
+    window.updatePricingStaleBanner = updatePricingStaleBanner;
+
+    let lastKnownBillingCalibration = null;
+
+    // JT-BILLING-WARNING-STATE-BEGIN
+    function computeHeaderBillingWarningState(cal, isLoggedIn) {
+      if (!isLoggedIn || !cal || typeof cal !== 'object') {
+        return { visible: false, severity: 'ok', label: '', tip: '' };
+      }
+      const bqStatus = String(cal.bigqueryStatus || 'NOT_CHECKED').toUpperCase();
+      if (bqStatus === 'OK') {
+        return { visible: false, severity: 'ok', label: '', tip: '' };
+      }
+      const activeSrc = String(cal.activeSource || 'DEFAULT_LIST_PRICES').toUpperCase();
+      const srcMap = {
+        BIGQUERY_EXPORT: 'BigQuery Export (cached)',
+        CSV_UPLOAD: 'Uploaded Billing CSV',
+        MANUAL: 'Manual parameters',
+        DEFAULT_LIST_PRICES: 'Public list prices (uncalibrated)'
+      };
+      const srcLabel = srcMap[activeSrc] || srcMap.DEFAULT_LIST_PRICES;
+
+      if (bqStatus === 'PERMISSION_DENIED') {
+        return {
+          visible: true,
+          severity: 'danger',
+          label: 'Billing 403',
+          tip: `BigQuery permission denied (HTTP 403): missing IAM access on Cloud Billing Export. Active cost source: ${srcLabel}. Click to inspect required roles or upload a Billing CSV in Billing settings.`,
+          activeSource: activeSrc,
+          bigqueryStatus: bqStatus
+        };
+      }
+      if (bqStatus === 'NOT_FOUND') {
+        return {
+          visible: true,
+          severity: 'warning',
+          label: 'Billing setup',
+          tip: `BigQuery Cloud Billing Export not found. Active cost source: ${srcLabel}. Click to open Billing settings for setup instructions or CSV upload.`,
+          activeSource: activeSrc,
+          bigqueryStatus: bqStatus
+        };
+      }
+      if (bqStatus === 'ERROR') {
+        return {
+          visible: true,
+          severity: 'danger',
+          label: 'Billing error',
+          tip: `BigQuery Billing Export check failed. Active cost source: ${srcLabel}. Click to open Billing settings and retry.`,
+          activeSource: activeSrc,
+          bigqueryStatus: bqStatus
+        };
+      }
+      return {
+        visible: true,
+        severity: 'warning',
+        label: 'Billing check',
+        tip: `BigQuery Cloud Billing Export not verified yet. Active cost source: ${srcLabel}. Click to open Billing settings and detect or upload calibration.`,
+        activeSource: activeSrc,
+        bigqueryStatus: bqStatus
+      };
+    }
+    // JT-BILLING-WARNING-STATE-END
+    window.computeHeaderBillingWarningState = computeHeaderBillingWarningState;
+
+    function updateHeaderBillingWarningUi(calOpt = null) {
+      const btn = document.getElementById('header-billing-warning-btn');
+      if (!btn) return;
+      if (calOpt && typeof calOpt === 'object') {
+        lastKnownBillingCalibration = calOpt;
+      }
+      const pricingCfgCal = (
+        window._jtModelsPricingState &&
+        window._jtModelsPricingState.config &&
+        window._jtModelsPricingState.config.billingCalibration
+      ) || null;
+      const scanCal = (globalScanData && globalScanData.billingCalibration) || null;
+      const cal = calOpt || pricingCfgCal || scanCal || lastKnownBillingCalibration;
+      const isLoggedIn = Boolean(lastKnownAuth && lastKnownAuth.tokenValid);
+      const state = computeHeaderBillingWarningState(cal, isLoggedIn);
+
+      if (!state.visible) {
+        btn.classList.add('hidden');
+        return;
+      }
+      btn.classList.remove('hidden');
+      const lbl = document.getElementById('header-billing-warning-label');
+      if (lbl) lbl.textContent = state.label;
+      btn.setAttribute('data-jt-tip', state.tip);
+      btn.setAttribute('aria-label', state.tip);
+
+      btn.classList.remove(
+        'border-amber-400/50', 'bg-amber-500/15', 'text-amber-200', 'hover:bg-amber-500/25',
+        'border-rose-400/60', 'bg-rose-500/20', 'text-rose-200', 'hover:bg-rose-500/30'
+      );
+      if (state.severity === 'danger') {
+        btn.classList.add('border-rose-400/60', 'bg-rose-500/20', 'text-rose-200', 'hover:bg-rose-500/30');
+      } else {
+        btn.classList.add('border-amber-400/50', 'bg-amber-500/15', 'text-amber-200', 'hover:bg-amber-500/25');
+      }
+    }
+    window.updateHeaderBillingWarningUi = updateHeaderBillingWarningUi;
+
+    function jumpToBillingCalibrationSettings() {
+      closeJtMenus();
+      activeSubTabs['pricing'] = 'pricing-settings';
+      switchTab('pricing');
+      requestAnimationFrame(() => {
+        const panel = document.getElementById('pricing-calibration-panel') || document.getElementById('pricing-billing-settings-box');
+        if (panel && typeof panel.scrollIntoView === 'function') {
+          panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    }
+    window.jumpToBillingCalibrationSettings = jumpToBillingCalibrationSettings;
+
     function _handleScanResponseDataLoaded(data) {
       globalScanData = data;
+      if (data && data.billingCalibration) {
+        lastKnownBillingCalibration = data.billingCalibration;
+      }
+      updatePricingStaleBanner();
+      updateHeaderBillingWarningUi(data && data.billingCalibration ? data.billingCalibration : null);
       if (typeof resetAllTablesFrontendPagination === 'function') {
         resetAllTablesFrontendPagination();
       }
@@ -1605,6 +1749,9 @@
     function _handleNeedsLoginRedirect() {
       clearBrowserAccountSession();
       globalScanData = null;
+      lastKnownBillingCalibration = null;
+      updatePricingStaleBanner();
+      updateHeaderBillingWarningUi(null);
       document.getElementById('auth-alert-banner').classList.remove('hidden');
       openLoginScreen(false);
     }
@@ -1630,6 +1777,10 @@
         });
         const data = await res.json();
         _syncScanResponseAuth(data.auth);
+        if (data && data.billingCalibration) {
+          lastKnownBillingCalibration = data.billingCalibration;
+          updateHeaderBillingWarningUi(data.billingCalibration);
+        }
         if (!data.success) {
           isLiveScanPolling = false;
           setScanButtonsLocked(false, 'Scan Active');
@@ -1674,6 +1825,10 @@
         });
         const data = await res.json();
         _syncScanResponseAuth(data.auth);
+        if (data && data.billingCalibration) {
+          lastKnownBillingCalibration = data.billingCalibration;
+          updateHeaderBillingWarningUi(data.billingCalibration);
+        }
         if (!data.success) {
           if (data.needsLogin) {
             _handleNeedsLoginRedirect();
@@ -2406,6 +2561,7 @@
     // AGGIORNAMENTO DASHBOARD (KPI + GRAFICI + TABELLE)
     // =========================================================================
     function refreshDashboardView() {
+      updatePricingStaleBanner();
       syncFilterbarForView(currentTab);
       updateFilterbarUi();
       if (!globalScanData) return;
@@ -2811,6 +2967,7 @@
       if (chartsWrapEl) chartsWrapEl.classList.toggle('hidden', !isDash || !wantCharts);
       const summaryStripEl = document.getElementById('global-summary-strip');
       if (summaryStripEl) summaryStripEl.classList.toggle('hidden', isDash);
+      updatePricingStaleBanner();
 
       ['dashboard', 'projects', 'sync', 'features', 'security', 'daily', 'credentials', 'users', 'ai-tools', 'models', 'pricing'].forEach(t => {
         const btn = document.getElementById('tab-' + t);

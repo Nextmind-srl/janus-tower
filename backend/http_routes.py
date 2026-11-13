@@ -91,6 +91,7 @@ DEMO_BLOCKED_POST_PATHS = {
     "/api/projects-sync/force-scan": "Project re-scan",
     "/api/project-scan": "Project re-scan",
     "/api/models-pricing/sync": "Price list sync",
+    "/api/models-pricing/calibrate-bigquery": "BigQuery billing calibration",
     "/api/data/purge": "Local data purge",
     "/api/auth/logout": "Sign out",
 }
@@ -385,6 +386,7 @@ class MonitorHandler(SimpleHTTPRequestHandler):
                         cached_resp = RAM_PAYLOAD_CACHE[ram_key]
                         cached_resp["auth"] = st
                         cached_resp["scanProgress"] = get_scan_progress_snapshot(active_acc)
+                        cached_resp["billingCalibration"] = get_billing_calibration_summary()
                         self.send_json(cached_resp)
                         return
 
@@ -410,6 +412,7 @@ class MonitorHandler(SimpleHTTPRequestHandler):
                         enrich_scan_payload_security(cached_data)
                         RAM_PAYLOAD_CACHE[ram_key] = cached_data
                         cached_data["scanProgress"] = get_scan_progress_snapshot(active_acc)
+                        cached_data["billingCalibration"] = get_billing_calibration_summary()
                         self.send_json(cached_data)
                         return
 
@@ -422,6 +425,7 @@ class MonitorHandler(SimpleHTTPRequestHandler):
                 sliced_resp = RAM_PAYLOAD_CACHE[ram_slice_key]
                 sliced_resp["auth"] = st
                 sliced_resp["scanProgress"] = get_scan_progress_snapshot(active_acc)
+                sliced_resp["billingCalibration"] = get_billing_calibration_summary()
                 self.send_json(sliced_resp)
                 return
 
@@ -440,10 +444,17 @@ class MonitorHandler(SimpleHTTPRequestHandler):
                 sliced_data["sync"] = build_sync_summary_for_account(active_acc, reg)
                 RAM_PAYLOAD_CACHE[ram_slice_key] = sliced_data
                 sliced_data["scanProgress"] = get_scan_progress_snapshot(active_acc)
+                sliced_data["billingCalibration"] = get_billing_calibration_summary()
                 self.send_json(sliced_data)
                 return
 
-            self.send_json({"success": False, "noCacheYet": True, "auth": st, "scanProgress": get_scan_progress_snapshot(active_acc)})
+            self.send_json({
+                "success": False,
+                "noCacheYet": True,
+                "auth": st,
+                "scanProgress": get_scan_progress_snapshot(active_acc),
+                "billingCalibration": get_billing_calibration_summary(),
+            })
             return
 
         async_mode = qs.get("async", ["0"])[0] == "1"
@@ -459,6 +470,8 @@ class MonitorHandler(SimpleHTTPRequestHandler):
             end_date=end_date,
             preset=eff_preset
         )
+        if isinstance(res, dict):
+            res["billingCalibration"] = get_billing_calibration_summary()
         self.send_json(res)
 
     def _reject_bad_origin(self, method: str) -> bool:
@@ -686,7 +699,10 @@ class MonitorHandler(SimpleHTTPRequestHandler):
             self._send_demo_blocked(DEMO_BLOCKED_POST_PATHS[parsed.path])
             return
         length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(length).decode("utf-8") if length > 0 else "{}"
+        if length > 20_000_000:
+            self.send_json({"success": False, "error": "Request body exceeds the 20 MB limit."}, 413)
+            return
+        body = self.rfile.read(length).decode("utf-8", errors="replace") if length > 0 else "{}"
         try:
             req = json.loads(body) if body else {}
         except Exception:
@@ -837,6 +853,8 @@ class MonitorHandler(SimpleHTTPRequestHandler):
                 browser_accounts=browser_accs,
                 session_id=req_sid
             )
+            if isinstance(res, dict):
+                res["billingCalibration"] = get_billing_calibration_summary()
             self.send_json(res)
             return
 
@@ -894,6 +912,26 @@ class MonitorHandler(SimpleHTTPRequestHandler):
                 cfg = sync_models_and_pricing_from_gcp_api(
                     token, user_project=(quota_cands[0] if quota_cands else None), quota_candidates=quota_cands
                 )
+                bq_auto_on = bool(normalize_billing_calibration_block(
+                    load_models_pricing_config().get("billingCalibration")).get("bigqueryAutoSync"))
+                if bq_auto_on and "discover_and_calibrate_bigquery_billing" in globals():
+                    with contextlib.suppress(Exception):
+                        bq_res = discover_and_calibrate_bigquery_billing(
+                            token=token,
+                            active_acc=active_acc,
+                            quota_candidates=quota_cands,
+                            auto_apply=True,
+                            force_apply=False,
+                        )
+                        if isinstance(bq_res, dict) and isinstance(bq_res.get("config"), dict):
+                            cfg = bq_res["config"]
+                reprice_stats = {"repriced": 0, "skipped": 0}
+                try:
+                    res_stats = reprice_all_cached_payloads(active_acc)
+                    if isinstance(res_stats, dict):
+                        reprice_stats = res_stats
+                except Exception:
+                    reprice_stats = {"repriced": 0, "skipped": 0}
                 RAM_PAYLOAD_CACHE.clear()
                 observed = compute_observed_models_summary(active_acc, cfg=cfg)
                 self.send_json({
@@ -902,6 +940,8 @@ class MonitorHandler(SimpleHTTPRequestHandler):
                     "modelsCount": len((cfg or {}).get("models") or {}),
                     "observed": observed,
                     "auth": st,
+                    "repriced": int(reprice_stats.get("repriced", 0)),
+                    "skipped": int(reprice_stats.get("skipped", 0)),
                 })
             finally:
                 MODELS_PRICING_SYNC_LOCK.release()
@@ -924,6 +964,13 @@ class MonitorHandler(SimpleHTTPRequestHandler):
             if not ok:
                 self.send_json({"success": False, "error": err_msg}, 400)
                 return
+            reprice_stats = {"repriced": 0, "skipped": 0}
+            try:
+                res_stats = reprice_all_cached_payloads(active_acc)
+                if isinstance(res_stats, dict):
+                    reprice_stats = res_stats
+            except Exception:
+                reprice_stats = {"repriced": 0, "skipped": 0}
             RAM_PAYLOAD_CACHE.clear()
             observed = compute_observed_models_summary(active_acc, cfg=cfg)
             self.send_json({
@@ -932,7 +979,111 @@ class MonitorHandler(SimpleHTTPRequestHandler):
                 "modelsCount": len((cfg or {}).get("models") or {}),
                 "observed": observed,
                 "auth": st,
+                "repriced": int(reprice_stats.get("repriced", 0)),
+                "skipped": int(reprice_stats.get("skipped", 0)),
             })
+            return
+
+        if parsed.path == "/api/models-pricing/calibrate-bigquery":
+            req_acc, browser_accs = self.get_browser_account_context(body_dict=req)
+            st = get_auth_status_for_browser(req_acc, browser_accs, session_id=getattr(self, "_current_req_sid", None))
+            token = st.get("accessToken")
+            active_acc = st.get("activeAccount")
+            st.pop("accessToken", None)
+            if not active_acc or not st.get("tokenValid") or not token:
+                self.send_json({
+                    "success": False,
+                    "needsLogin": True,
+                    "error": st.get("tokenError") or "Daily authentication required.",
+                    "auth": st,
+                }, 401, clear_cookie=True)
+                return
+            if not MODELS_PRICING_SYNC_LOCK.acquire(blocking=False):
+                self.send_json({
+                    "success": False,
+                    "error": "Another pricing sync or calibration is already in progress.",
+                }, 409)
+                return
+            try:
+                quota_cands = get_quota_project_candidates(active_acc)
+                explicit_tbl = req.get("billingExportTable") if isinstance(req, dict) else None
+                res_bq = discover_and_calibrate_bigquery_billing(
+                    token=token,
+                    active_acc=active_acc,
+                    quota_candidates=quota_cands,
+                    explicit_table=explicit_tbl,
+                    auto_apply=True,
+                    force_apply=True,
+                )
+                if not res_bq.get("success"):
+                    self.send_json({"success": False, "error": res_bq.get("error") or "BigQuery calibration failed."}, 400)
+                    return
+                cfg = res_bq.get("config") or load_models_pricing_config()
+                reprice_stats = {"repriced": 0, "skipped": 0}
+                if res_bq.get("applied"):
+                    with contextlib.suppress(Exception):
+                        rs = reprice_all_cached_payloads(active_acc)
+                        if isinstance(rs, dict):
+                            reprice_stats = rs
+                RAM_PAYLOAD_CACHE.clear()
+                observed = compute_observed_models_summary(active_acc, cfg=cfg)
+                self.send_json({
+                    "success": True,
+                    "bigqueryStatus": res_bq.get("bigqueryStatus"),
+                    "applied": bool(res_bq.get("applied")),
+                    "config": sanitize_models_pricing_config_for_http(cfg),
+                    "modelsCount": len((cfg or {}).get("models") or {}),
+                    "observed": observed,
+                    "auth": st,
+                    "repriced": int(reprice_stats.get("repriced", 0)),
+                    "skipped": int(reprice_stats.get("skipped", 0)),
+                })
+            finally:
+                MODELS_PRICING_SYNC_LOCK.release()
+            return
+
+        if parsed.path == "/api/models-pricing/calibrate-csv":
+            req_acc, browser_accs = self.get_browser_account_context(body_dict=req)
+            st = get_auth_status_for_browser(req_acc, browser_accs, session_id=getattr(self, "_current_req_sid", None))
+            active_acc = st.get("activeAccount")
+            st.pop("accessToken", None)
+            if not active_acc or not st.get("tokenValid"):
+                self.send_json({
+                    "success": False,
+                    "needsLogin": True,
+                    "error": st.get("tokenError") or "Daily authentication required.",
+                    "auth": st,
+                }, 401, clear_cookie=True)
+                return
+            if not MODELS_PRICING_SYNC_LOCK.acquire(blocking=False):
+                self.send_json({
+                    "success": False,
+                    "error": "Another pricing sync or calibration is already in progress.",
+                }, 409)
+                return
+            try:
+                ok, err_msg, cfg = calibrate_from_csv_uploads((req or {}).get("files"))
+                if not ok:
+                    self.send_json({"success": False, "error": err_msg}, 400)
+                    return
+                reprice_stats = {"repriced": 0, "skipped": 0}
+                with contextlib.suppress(Exception):
+                    rs = reprice_all_cached_payloads(active_acc)
+                    if isinstance(rs, dict):
+                        reprice_stats = rs
+                RAM_PAYLOAD_CACHE.clear()
+                observed = compute_observed_models_summary(active_acc, cfg=cfg)
+                self.send_json({
+                    "success": True,
+                    "config": sanitize_models_pricing_config_for_http(cfg),
+                    "modelsCount": len((cfg or {}).get("models") or {}),
+                    "observed": observed,
+                    "auth": st,
+                    "repriced": int(reprice_stats.get("repriced", 0)),
+                    "skipped": int(reprice_stats.get("skipped", 0)),
+                })
+            finally:
+                MODELS_PRICING_SYNC_LOCK.release()
             return
 
         self.send_json({"success": False, "error": "Endpoint not found"}, 404)

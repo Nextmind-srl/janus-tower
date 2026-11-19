@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim AS runtime
+FROM python:3.15-slim AS runtime
 
 LABEL org.opencontainers.image.title="JanusTower — Cloud AI FinOps & Security Control Tower" \
       org.opencontainers.image.description="Read-only FinOps, Shadow AI telemetry & security posture control tower for Google Cloud AI" \
